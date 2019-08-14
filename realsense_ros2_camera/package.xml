@@ -7,7 +7,7 @@
   <maintainer email="sharron.liu@intel.com">Sharron LIU</maintainer>
   <maintainer email="chris.ye@intel.com">Chris Ye</maintainer>
   <license>Apache License 2.0</license>
-
+  <depend>object_analytics_node</depend>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
   <build_depend>builtin_interfaces</build_depend>

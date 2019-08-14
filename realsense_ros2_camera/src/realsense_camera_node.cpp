@@ -11,8 +11,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-// cpplint: c system headers
 #include <eigen3/Eigen/Geometry>
 #include <builtin_interfaces/msg/time.hpp>
 #include <console_bridge/console.h>
@@ -38,6 +36,7 @@
 #include <algorithm>
 #include <csignal>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 #include <string>
@@ -48,6 +47,11 @@
 #include "realsense_camera_msgs/msg/imu_info.hpp"
 #include "realsense_camera_msgs/msg/extrinsics.hpp"
 
+
+#include <class_loader/class_loader.hpp>
+#include <rclcpp/rclcpp.hpp>
+#include <rcutils/cmdline_parser.h>
+#include <rclcpp_components/node_factory.hpp>
 
 #define REALSENSE_ROS_EMBEDDED_VERSION_STR (VAR_ARG_STRING(VERSION: REALSENSE_ROS_MAJOR_VERSION. \
   REALSENSE_ROS_MINOR_VERSION.REALSENSE_ROS_PATCH_VERSION))
@@ -1386,12 +1390,43 @@ private:
 };  // end class
 }  // namespace realsense_ros2_camera
 
+
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  auto node = std::make_shared<realsense_ros2_camera::RealSenseCameraNode>();
-  node->onInit();
-  rclcpp::spin(node);
+  auto rs_node = std::make_shared<realsense_ros2_camera::RealSenseCameraNode>();
+
+  rclcpp::executors::SingleThreadedExecutor exec;
+  rclcpp::NodeOptions options;
+  std::vector<class_loader::ClassLoader *> loaders;
+  std::vector<rclcpp_components::NodeInstanceWrapper> node_wrappers;
+  rclcpp::Logger logger = rclcpp::get_logger("OA_Composition");
+
+  std::vector<std::string> libraries;
+
+  libraries.push_back("libsplitter_component.so");
+  for (auto library : libraries) {
+      RCLCPP_INFO(logger, "Load library %s", library.c_str());
+      auto loader = new class_loader::ClassLoader(library);
+      auto classes = loader->getAvailableClasses<rclcpp_components::NodeFactory>();
+      for (auto clazz : classes) {
+          RCLCPP_INFO(logger, "Instantiate class %s", clazz.c_str());
+          auto node_factory = loader->createInstance<rclcpp_components::NodeFactory>(clazz);
+          auto wrapper = node_factory->create_node_instance(options);
+          auto node = wrapper.get_node_base_interface();
+          node_wrappers.push_back(wrapper);
+          exec.add_node(node);
+      }
+      loaders.push_back(loader);
+  }
+  rs_node->onInit();
+  exec.add_node(rs_node);
+  exec.spin();
+  for (auto wrapper : node_wrappers) {
+    exec.remove_node(wrapper.get_node_base_interface());
+  }
+  node_wrappers.clear();
   rclcpp::shutdown();
   return 0;
 }
+

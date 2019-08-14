@@ -26,9 +26,9 @@ def generate_launch_description():
                                 'launch', 'default.rviz')
     return LaunchDescription([
         # Realsense
-        launch_ros.actions.Node(
-            package='realsense_ros2_camera', node_executable='realsense_ros2_camera',
-            output='screen'),
+      # launch_ros.actions.Node(
+      #     package='realsense_ros2_camera', node_executable='realsense_ros2_camera',
+      #     output='screen'),
 
         # Rviz
         launch_ros.actions.Node(

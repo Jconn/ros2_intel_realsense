@@ -51,12 +51,29 @@ const int COLOR_HEIGHT = 480;
 const int FISHEYE_WIDTH = 640;
 const int FISHEYE_HEIGHT = 480;
 
+/*
+const int DEPTH_WIDTH = 424;
+const int DEPTH_HEIGHT = 240;
 
-const int DEPTH_FPS = 30;
-const int INFRA1_FPS = 30;
-const int INFRA2_FPS = 30;
-const int COLOR_FPS = 30;
-const int FISHEYE_FPS = 30;
+const int INFRA1_WIDTH = 424;
+const int INFRA1_HEIGHT = 240;
+
+const int INFRA2_WIDTH = 424;
+const int INFRA2_HEIGHT = 240;
+
+const int COLOR_WIDTH = 640;
+const int COLOR_HEIGHT = 480;
+
+const int FISHEYE_WIDTH = 424;
+const int FISHEYE_HEIGHT = 240;
+
+*/
+
+const int DEPTH_FPS = 6;
+const int INFRA1_FPS = 6;
+const int INFRA2_FPS = 6;
+const int COLOR_FPS = 6;
+const int FISHEYE_FPS = 6;
 const int GYRO_FPS = 1000;
 const int ACCEL_FPS = 1000;
 
