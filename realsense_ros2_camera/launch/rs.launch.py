@@ -12,26 +12,16 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Launch realsense_ros2_camera node and rviz."""
+"""Launch realsense_ros2_camera node without rviz2."""
 
-import os
-
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 import launch_ros.actions
 
 
 def generate_launch_description():
-    default_rviz = os.path.join(get_package_share_directory('realsense_ros2_camera'),
-                                'launch', 'default.rviz')
     return LaunchDescription([
         # Realsense
-      # launch_ros.actions.Node(
-      #     package='realsense_ros2_camera', node_executable='realsense_ros2_camera',
-      #     output='screen'),
-
-        # Rviz
         launch_ros.actions.Node(
-            package='rviz2', node_executable='rviz2', output='screen',
-            arguments=['--display-config', default_rviz]),
+            package='realsense_ros2_camera', node_executable='realsense_ros2_camera',
+            output='screen'),
     ])
