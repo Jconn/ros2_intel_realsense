@@ -79,11 +79,11 @@ const int ACCEL_FPS = 1000;
 
 
 const bool ENABLE_DEPTH = true;
-const bool ENABLE_INFRA1 = true;
-const bool ENABLE_INFRA2 = true;
+const bool ENABLE_INFRA1 = false;
+const bool ENABLE_INFRA2 = false;
 const bool ENABLE_COLOR = true;
-const bool ENABLE_FISHEYE = true;
-const bool ENABLE_IMU = true;
+const bool ENABLE_FISHEYE = false;
+const bool ENABLE_IMU = false;
 
 
 const char DEFAULT_BASE_FRAME_ID[] = "camera_link";
