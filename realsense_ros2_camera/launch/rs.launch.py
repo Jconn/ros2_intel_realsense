@@ -32,14 +32,11 @@ def generate_launch_description():
                 output='screen',
                 parameters=[{
                 'enable_pointcloud': True, 
+                'enable_aligned_pointcloud': False,
+                'enable_depth': True,
+                'enable_aligned_depth': False,
                 'depth_fps': depth_fps,
-                'color_fps': color_fps,
-                'enable_aligned_pointcloud': True,
-                'enable_aligned_depth': True,
-                'enable_depth': True}],
-                remappings=
-                [
-                    ('/camera/depth/color/points','/object_analytics/registered_points')
-                ]   
+                'color_fps': color_fps
+                }]
             )   
     ])

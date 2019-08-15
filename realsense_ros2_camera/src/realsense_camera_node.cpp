@@ -48,11 +48,6 @@
 #include "realsense_camera_msgs/msg/extrinsics.hpp"
 
 
-#include <class_loader/class_loader.hpp>
-#include <rclcpp/rclcpp.hpp>
-#include <rcutils/cmdline_parser.h>
-#include <rclcpp_components/node_factory.hpp>
-
 #define REALSENSE_ROS_EMBEDDED_VERSION_STR (VAR_ARG_STRING(VERSION: REALSENSE_ROS_MAJOR_VERSION. \
   REALSENSE_ROS_MINOR_VERSION.REALSENSE_ROS_PATCH_VERSION))
 constexpr auto realsense_ros2_camera_version = REALSENSE_ROS_EMBEDDED_VERSION_STR;
@@ -204,11 +199,11 @@ private:
       _enable[INFRA2] = false;
     }
 
-    if (!_enable[DEPTH] || !_align_depth) {
+    if (!_enable[DEPTH]) {
       _align_pointcloud = false;
     }
 
-    if (_pointcloud || _align_depth) {
+    if (_align_depth) {
       _sync_frames = true;
     } else {
       _sync_frames = false;
@@ -543,7 +538,7 @@ private:
               publishAlignedDepthImg(frame, t);
             }
 
-            if (_pointcloud && is_depth_frame_arrived && is_color_frame_arrived) {
+            if (_pointcloud && is_depth_frame_arrived) {
               RCLCPP_DEBUG(logger_, "publishPCTopic(...)");
               publishPCTopic(t);
             }
@@ -557,10 +552,21 @@ private:
 
           } else {
             auto stream_type = frame.get_profile().stream_type();
+            if (RS2_STREAM_COLOR == stream_type) {
+                is_color_frame_arrived = true;
+            } else if (RS2_STREAM_DEPTH == stream_type) {
+                is_depth_frame_arrived = true;
+            }
+
             RCLCPP_DEBUG(logger_,
               "%s video frame arrived. frame_number: %llu ; frame_TS: %f ; ros_TS(NSec): %lu",
               rs2_stream_to_string(stream_type), frame.get_frame_number(),
               frame.get_timestamp(), t.nanoseconds());
+
+            if (_pointcloud && is_depth_frame_arrived) {
+              RCLCPP_DEBUG(logger_, "publishPCTopic(...)");
+              publishPCTopic(t);
+            }
             publishFrame(frame, t);
           }
         };
@@ -1047,7 +1053,6 @@ private:
 
   void publishPCTopic(const rclcpp::Time & t)
   {
-    auto color_intrinsics = _stream_intrinsics[COLOR];
     auto image_depth16 = reinterpret_cast<const uint16_t *>(_image[DEPTH].data);
     auto depth_intrinsics = _stream_intrinsics[DEPTH];
     sensor_msgs::msg::PointCloud2 msg_pointcloud;
@@ -1059,23 +1064,17 @@ private:
 
     sensor_msgs::PointCloud2Modifier modifier(msg_pointcloud);
 
-    modifier.setPointCloud2Fields(4,
+    modifier.setPointCloud2Fields(3,
       "x", 1, sensor_msgs::msg::PointField::FLOAT32,
       "y", 1, sensor_msgs::msg::PointField::FLOAT32,
-      "z", 1, sensor_msgs::msg::PointField::FLOAT32,
-      "rgb", 1, sensor_msgs::msg::PointField::FLOAT32);
-    modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+      "z", 1, sensor_msgs::msg::PointField::FLOAT32);
+    modifier.setPointCloud2FieldsByString(1, "xyz");
 
     sensor_msgs::PointCloud2Iterator<float> iter_x(msg_pointcloud, "x");
     sensor_msgs::PointCloud2Iterator<float> iter_y(msg_pointcloud, "y");
     sensor_msgs::PointCloud2Iterator<float> iter_z(msg_pointcloud, "z");
 
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(msg_pointcloud, "r");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(msg_pointcloud, "g");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(msg_pointcloud, "b");
-
-    float depth_point[3], color_point[3], color_pixel[2], scaled_depth;
-    unsigned char * color_data = _image[COLOR].data;
+    float depth_point[3], scaled_depth;
 
     // Fill the PointCloud2 fields
     for (int y = 0; y < depth_intrinsics.height; ++y) {
@@ -1093,32 +1092,8 @@ private:
         *iter_x = depth_point[0];
         *iter_y = depth_point[1];
         *iter_z = depth_point[2];
-
-        rs2_transform_point_to_point(color_point, &_depth2color_extrinsics, depth_point);
-        rs2_project_point_to_pixel(color_pixel, &color_intrinsics, color_point);
-
-        if (color_pixel[1] < 0.f || color_pixel[1] > color_intrinsics.height ||
-          color_pixel[0] < 0.f || color_pixel[0] > color_intrinsics.width)
-        {
-          // For out of bounds color data, default to a shade of blue in order to visually
-          // distinguish holes. This color value is same as the librealsense out of bounds color
-          // value.
-          *iter_r = static_cast<uint8_t>(96);
-          *iter_g = static_cast<uint8_t>(157);
-          *iter_b = static_cast<uint8_t>(198);
-        } else {
-          auto i = static_cast<int>(color_pixel[0]);
-          auto j = static_cast<int>(color_pixel[1]);
-
-          auto offset = i * 3 + j * color_intrinsics.width * 3;
-          *iter_r = static_cast<uint8_t>(color_data[offset]);
-          *iter_g = static_cast<uint8_t>(color_data[offset + 1]);
-          *iter_b = static_cast<uint8_t>(color_data[offset + 2]);
-        }
-
         ++image_depth16;
         ++iter_x; ++iter_y; ++iter_z;
-        ++iter_r; ++iter_g; ++iter_b;
       }
     }
     _pointcloud_publisher->publish(msg_pointcloud);
@@ -1394,38 +1369,9 @@ private:
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
-  auto rs_node = std::make_shared<realsense_ros2_camera::RealSenseCameraNode>();
-
-  rclcpp::executors::SingleThreadedExecutor exec;
-  rclcpp::NodeOptions options;
-  std::vector<class_loader::ClassLoader *> loaders;
-  std::vector<rclcpp_components::NodeInstanceWrapper> node_wrappers;
-  rclcpp::Logger logger = rclcpp::get_logger("OA_Composition");
-
-  std::vector<std::string> libraries;
-
-  libraries.push_back("libsplitter_component.so");
-  for (auto library : libraries) {
-      RCLCPP_INFO(logger, "Load library %s", library.c_str());
-      auto loader = new class_loader::ClassLoader(library);
-      auto classes = loader->getAvailableClasses<rclcpp_components::NodeFactory>();
-      for (auto clazz : classes) {
-          RCLCPP_INFO(logger, "Instantiate class %s", clazz.c_str());
-          auto node_factory = loader->createInstance<rclcpp_components::NodeFactory>(clazz);
-          auto wrapper = node_factory->create_node_instance(options);
-          auto node = wrapper.get_node_base_interface();
-          node_wrappers.push_back(wrapper);
-          exec.add_node(node);
-      }
-      loaders.push_back(loader);
-  }
-  rs_node->onInit();
-  exec.add_node(rs_node);
-  exec.spin();
-  for (auto wrapper : node_wrappers) {
-    exec.remove_node(wrapper.get_node_base_interface());
-  }
-  node_wrappers.clear();
+  auto node = std::make_shared<realsense_ros2_camera::RealSenseCameraNode>();
+  node->onInit();
+  rclcpp::spin(node);
   rclcpp::shutdown();
   return 0;
 }
