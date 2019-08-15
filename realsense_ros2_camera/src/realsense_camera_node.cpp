@@ -26,6 +26,7 @@
 #include <sensor_msgs/msg/imu.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/point_cloud2_iterator.hpp>
+#include <std_msgs/msg/float64.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
@@ -365,15 +366,18 @@ private:
   {
     RCLCPP_INFO(logger_, "setupPublishers...");
 
+    _depth_factor_publisher = this->create_publisher<std_msgs::msg::Float64>("/camera/depth/depth_factor", 1);
+
     if (true == _enable[DEPTH]) {
       _image_publishers[DEPTH] = image_transport::create_publisher(
         this, "camera/depth/image_rect_raw");
+
       _info_publisher[DEPTH] = this->create_publisher<sensor_msgs::msg::CameraInfo>(
         "camera/depth/camera_info", 1);
 
       if (_pointcloud) {
         _pointcloud_publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-          "camera/depth/color/points", 1);
+          "camera/depth/color/points", rclcpp::SensorDataQoS());
       }
 
       if (_align_depth) {
@@ -562,9 +566,9 @@ private:
               "%s video frame arrived. frame_number: %llu ; frame_TS: %f ; ros_TS(NSec): %lu",
               rs2_stream_to_string(stream_type), frame.get_frame_number(),
               frame.get_timestamp(), t.nanoseconds());
-
             if (_pointcloud && is_depth_frame_arrived) {
               RCLCPP_DEBUG(logger_, "publishPCTopic(...)");
+
               publishPCTopic(t);
             }
             publishFrame(frame, t);
@@ -1096,6 +1100,10 @@ private:
         ++iter_x; ++iter_y; ++iter_z;
       }
     }
+    std_msgs::msg::Float64 scale;
+    scale.data = _depth_scale_meters;
+    _depth_factor_publisher->publish(scale);
+
     _pointcloud_publisher->publish(msg_pointcloud);
   }
 
@@ -1351,6 +1359,8 @@ private:
 
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _pointcloud_publisher;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr _align_pointcloud_publisher;
+
+  rclcpp::Publisher<std_msgs::msg::Float64>::SharedPtr _depth_factor_publisher;
 
   rclcpp::Time _ros_time_base;
   rclcpp::Logger logger_ = rclcpp::get_logger("RealSenseCameraNode");
