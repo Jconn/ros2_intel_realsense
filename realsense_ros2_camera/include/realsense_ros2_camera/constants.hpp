@@ -30,7 +30,7 @@
 
 namespace realsense_ros2_camera
 {
-const bool POINTCLOUD = false;
+const bool POINTCLOUD = true;
 const bool ALIGN_POINTCLOUD = true;
 const bool SYNC_FRAMES = true;
 
@@ -69,7 +69,7 @@ const int FISHEYE_HEIGHT = 240;
 
 */
 
-const int DEPTH_FPS = 6;
+const int DEPTH_FPS = 30;
 const int INFRA1_FPS = 6;
 const int INFRA2_FPS = 6;
 const int COLOR_FPS = 6;

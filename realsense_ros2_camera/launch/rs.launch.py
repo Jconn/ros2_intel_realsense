@@ -16,12 +16,30 @@
 
 from launch import LaunchDescription
 import launch_ros.actions
-
-
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
 def generate_launch_description():
+    depth_fps = LaunchConfiguration('depth_fps', default='6')
+    color_fps = LaunchConfiguration('color_fps', default='6')
+
     return LaunchDescription([
-        # Realsense
-        launch_ros.actions.Node(
-            package='realsense_ros2_camera', node_executable='realsense_ros2_camera',
-            output='screen'),
+            # Realsense
+            launch_ros.actions.Node
+            (
+                package='realsense_ros2_camera',
+                node_name='realsense_ros2_camera', 
+                node_executable='realsense_ros2_camera',
+                output='screen',
+                parameters=[{
+                'enable_pointcloud': True, 
+                'depth_fps': depth_fps,
+                'color_fps': color_fps,
+                'enable_aligned_pointcloud': True,
+                'enable_aligned_depth': True,
+                'enable_depth': True}],
+                remappings=
+                [
+                    ('/camera/depth/color/points','/object_analytics/registered_points')
+                ]   
+            )   
     ])
