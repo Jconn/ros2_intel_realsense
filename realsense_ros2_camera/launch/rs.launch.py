@@ -34,7 +34,7 @@ def generate_launch_description():
                 'enable_pointcloud': True, 
                 'enable_aligned_pointcloud': False,
                 'enable_depth': True,
-                'enable_aligned_depth': False,
+                'enable_aligned_depth': True,
                 'depth_fps': depth_fps,
                 'color_fps': color_fps
                 }]
