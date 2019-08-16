@@ -1062,8 +1062,8 @@ private:
     sensor_msgs::msg::PointCloud2 msg_pointcloud;
     msg_pointcloud.header.stamp = t;
     msg_pointcloud.header.frame_id = _optical_frame_id[DEPTH];
-    msg_pointcloud.width = depth_intrinsics.width;
-    msg_pointcloud.height = depth_intrinsics.height;
+    msg_pointcloud.width = depth_intrinsics.width/4;
+    msg_pointcloud.height = depth_intrinsics.height/4;
     msg_pointcloud.is_dense = true;
 
     sensor_msgs::PointCloud2Modifier modifier(msg_pointcloud);
@@ -1081,8 +1081,8 @@ private:
     float depth_point[3], scaled_depth;
 
     // Fill the PointCloud2 fields
-    for (int y = 0; y < depth_intrinsics.height; ++y) {
-      for (int x = 0; x < depth_intrinsics.width; ++x) {
+    for (int y = 0; y < depth_intrinsics.height; y+=12) {
+      for (int x = 0; x < depth_intrinsics.width; x+=4) {
         scaled_depth = static_cast<float>(*image_depth16) * _depth_scale_meters;
         float depth_pixel[2] = {static_cast<float>(x), static_cast<float>(y)};
         rs2_deproject_pixel_to_point(depth_point, &depth_intrinsics, depth_pixel, scaled_depth);
@@ -1096,9 +1096,11 @@ private:
         *iter_x = depth_point[0];
         *iter_y = depth_point[1];
         *iter_z = depth_point[2];
-        ++image_depth16;
+        image_depth16+=4;
         ++iter_x; ++iter_y; ++iter_z;
       }
+      //skipping a lot of data
+      image_depth16 += 11*depth_intrinsics.width;
     }
     std_msgs::msg::Float64 scale;
     scale.data = _depth_scale_meters;
