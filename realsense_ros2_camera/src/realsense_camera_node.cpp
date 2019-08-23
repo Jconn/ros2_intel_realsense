@@ -364,7 +364,9 @@ private:
 
   void setupPublishers()
   {
+
     RCLCPP_INFO(logger_, "setupPublishers...");
+    _depth_factor_publisher = this->create_publisher<std_msgs::msg::Float64>("/camera/depth/depth_factor", 1);
 
     auto custom_qos_profile = rmw_qos_profile_sensor_data;
     custom_qos_profile.depth = 10;
