@@ -367,6 +367,9 @@ private:
   {
     RCLCPP_INFO(logger_, "setupPublishers...");
 
+    auto custom_qos_profile = rmw_qos_profile_sensor_data;
+    custom_qos_profile.depth = 10;
+
     if (true == _enable[DEPTH]) {
       _image_publishers[DEPTH] = image_transport::create_publisher(
         this, "camera/depth/image_rect_raw");
@@ -375,19 +378,19 @@ private:
 
       if (_pointcloud) {
         _pointcloud_publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-          "camera/depth/color/points", 1);
+          "camera/depth/color/points", custom_qos_profile);
       }
 
       if (_align_depth) {
         _align_depth_publisher = image_transport::create_publisher(
           this, "camera/aligned_depth_to_color/image_raw");
         _align_depth_camera_publisher = this->create_publisher<sensor_msgs::msg::CameraInfo>(
-          "camera/aligned_depth_to_color/camera_info", 1);
+          "camera/aligned_depth_to_color/camera_info",custom_qos_profile);
       }
 
       if (_align_pointcloud && _align_depth) {
         _align_pointcloud_publisher = this->create_publisher<sensor_msgs::msg::PointCloud2>(
-          "camera/aligned_depth_to_color/color/points", 1);
+                "camera/aligned_depth_to_color/color/points",custom_qos_profile);
       }
     }
 
@@ -409,7 +412,7 @@ private:
       _image_publishers[COLOR] = image_transport::create_publisher(
         this, "camera/color/image_raw");
       _info_publisher[COLOR] = this->create_publisher<sensor_msgs::msg::CameraInfo>(
-        "camera/color/camera_info", 1);
+        "camera/color/camera_info", 10);
     }
 
     if (true == _enable[FISHEYE] &&
