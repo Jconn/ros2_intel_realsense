@@ -368,8 +368,10 @@ private:
     RCLCPP_INFO(logger_, "setupPublishers...");
     _depth_factor_publisher = this->create_publisher<std_msgs::msg::Float64>("/camera/depth/depth_factor", 1);
 
-    auto custom_qos_profile = rmw_qos_profile_sensor_data;
-    custom_qos_profile.depth = 10;
+    //auto custom_qos_profile = rmw_qos_profile_sensor_data;
+
+    auto custom_qos_profile = rmw_qos_profile_default;
+    custom_qos_profile.depth = 15;
 
     if (true == _enable[DEPTH]) {
       _image_publishers[DEPTH] = image_transport::create_publisher(
@@ -565,12 +567,12 @@ private:
                 is_depth_frame_arrived = true;
             }
 
-            RCLCPP_DEBUG(logger_,
+            RCLCPP_INFO(logger_,
               "%s video frame arrived. frame_number: %llu ; frame_TS: %f ; ros_TS(NSec): %lu",
               rs2_stream_to_string(stream_type), frame.get_frame_number(),
               frame.get_timestamp(), t.nanoseconds());
             if (_pointcloud && is_depth_frame_arrived) {
-              RCLCPP_DEBUG(logger_, "publishPCTopic(...)");
+              RCLCPP_INFO(logger_, "publishPCTopic(...)");
 
               publishPCTopic(t);
             }
@@ -1065,8 +1067,8 @@ private:
     sensor_msgs::msg::PointCloud2 msg_pointcloud;
     msg_pointcloud.header.stamp = t;
     msg_pointcloud.header.frame_id = _optical_frame_id[DEPTH];
-    msg_pointcloud.width = depth_intrinsics.width/4;
-    msg_pointcloud.height = depth_intrinsics.height/4;
+    msg_pointcloud.width = depth_intrinsics.width/2;
+    msg_pointcloud.height = depth_intrinsics.height/2;
     msg_pointcloud.is_dense = true;
 
     sensor_msgs::PointCloud2Modifier modifier(msg_pointcloud);
@@ -1084,26 +1086,27 @@ private:
     float depth_point[3], scaled_depth;
 
     // Fill the PointCloud2 fields
-    for (int y = 0; y < depth_intrinsics.height; y+=12) {
-      for (int x = 0; x < depth_intrinsics.width; x+=4) {
+    for (int y = 0; y < depth_intrinsics.height; y+=2) {
+      for (int x = 0; x < depth_intrinsics.width; x+=2) {
         scaled_depth = static_cast<float>(*image_depth16) * _depth_scale_meters;
         float depth_pixel[2] = {static_cast<float>(x), static_cast<float>(y)};
         rs2_deproject_pixel_to_point(depth_point, &depth_intrinsics, depth_pixel, scaled_depth);
 
-        if (depth_point[2] <= 0.f || depth_point[2] > 5.f) {
-          depth_point[0] = 0.f;
-          depth_point[1] = 0.f;
-          depth_point[2] = 0.f;
+        if (depth_point[2] <= .075f || depth_point[2] > 5.f) {
+            //TODO: handle invalid points eloquently
+          depth_point[0] = 10.f;
+          depth_point[1] = 10.f;
+          depth_point[2] = 10.f;
         }
 
         *iter_x = depth_point[0];
         *iter_y = depth_point[1];
         *iter_z = depth_point[2];
-        image_depth16+=4;
+        image_depth16+=2;
         ++iter_x; ++iter_y; ++iter_z;
       }
       //skipping a lot of data
-      image_depth16 += 11*depth_intrinsics.width;
+      image_depth16 += depth_intrinsics.width;
     }
     std_msgs::msg::Float64 scale;
     scale.data = _depth_scale_meters;
@@ -1118,7 +1121,6 @@ private:
 
     auto image_depth16 = reinterpret_cast<const uint16_t *>(aligned_depth.get_data());
     auto depth_intrinsics = _stream_intrinsics[COLOR];
-    unsigned char * color_data = _image[COLOR].data;
     sensor_msgs::msg::PointCloud2 msg_pointcloud;
     msg_pointcloud.header.stamp = t;
     msg_pointcloud.header.frame_id = _optical_frame_id[COLOR];
@@ -1131,17 +1133,12 @@ private:
     modifier.setPointCloud2Fields(3,
       "x", 1, sensor_msgs::msg::PointField::FLOAT32,
       "y", 1, sensor_msgs::msg::PointField::FLOAT32,
-      "z", 1, sensor_msgs::msg::PointField::FLOAT32,
-      "rgb", 1, sensor_msgs::msg::PointField::FLOAT32);
-    modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+      "z", 1, sensor_msgs::msg::PointField::FLOAT32);
+    modifier.setPointCloud2FieldsByString(1, "xyz");
 
     sensor_msgs::PointCloud2Iterator<float> iter_x(msg_pointcloud, "x");
     sensor_msgs::PointCloud2Iterator<float> iter_y(msg_pointcloud, "y");
     sensor_msgs::PointCloud2Iterator<float> iter_z(msg_pointcloud, "z");
-
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(msg_pointcloud, "r");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(msg_pointcloud, "g");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(msg_pointcloud, "b");
 
     float std_nan = std::numeric_limits<float>::quiet_NaN();
     float depth_point[3], scaled_depth;
@@ -1158,20 +1155,17 @@ private:
           *(iter_x + iter_offset) = std_nan;
           *(iter_y + iter_offset) = std_nan;
           *(iter_z + iter_offset) = std_nan;
-          *(iter_r + iter_offset) = static_cast<uint8_t>(96);
-          *(iter_g + iter_offset) = static_cast<uint8_t>(157);
-          *(iter_b + iter_offset) = static_cast<uint8_t>(198);
         } else {
           *(iter_x + iter_offset) = depth_point[0];
           *(iter_y + iter_offset) = depth_point[1];
           *(iter_z + iter_offset) = depth_point[2];
-          *(iter_r + iter_offset) = color_data[iter_offset * 3];
-          *(iter_g + iter_offset) = color_data[iter_offset * 3 + 1];
-          *(iter_b + iter_offset) = color_data[iter_offset * 3 + 2];
         }
 
         ++image_depth16;
       }
+
+      //skipping a lot of data
+      //image_depth16 += depth_intrinsics.width;
     }
 
     _align_pointcloud_publisher->publish(msg_pointcloud);
