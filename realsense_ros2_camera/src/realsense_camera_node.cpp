@@ -11,6 +11,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+//
+#include <geometry_msgs/msg/twist.hpp>
 #include <eigen3/Eigen/Geometry>
 #include <builtin_interfaces/msg/time.hpp>
 #include <console_bridge/console.h>
@@ -173,8 +175,14 @@ public:
   virtual void onInit()
   {
     getParameters();
+
+    RCLCPP_INFO(logger_, "found theta of %f and x of %f", 
+            _min_theta_vel, 
+            _min_x_vel);
+
     setupDevice();
     setupPublishers();
+    setupSubscribers();
     setupStreams();
     rclcpp::sleep_for(std::chrono::nanoseconds(2000000000));
     publishStaticTransforms();
@@ -184,8 +192,11 @@ public:
 private:
   void getParameters()
   {
+    this->declare_parameter("min_x_vel", .10);
+    this->declare_parameter("min_theta_vel", .9);
     RCLCPP_INFO(logger_, "getParameters...");
-
+    this->get_parameter("min_x_vel", _min_x_vel);
+    this->get_parameter("min_theta_vel", _min_theta_vel);
     this->get_parameter_or("enable_pointcloud", _pointcloud, POINTCLOUD);
     this->get_parameter_or("enable_aligned_pointcloud", _align_pointcloud, ALIGN_POINTCLOUD);
     // this->get_parameter_or("enable_sync", _sync_frames, SYNC_FRAMES);
@@ -360,6 +371,21 @@ private:
       RCLCPP_ERROR(logger_, "Unknown exception has occured!");
       throw;
     }
+  }
+
+  void setupSubscribers() 
+  {
+      vel_sub = this->create_subscription<geometry_msgs::msg::Twist>( "cmd_vel",
+              rclcpp::SystemDefaultsQoS(),
+              std::bind(&RealSenseCameraNode::collect_velocity, this, std::placeholders::_1) );
+
+
+  }
+
+  void collect_velocity(geometry_msgs::msg::Twist::SharedPtr vel_command)
+  {
+      RCLCPP_INFO(logger_, "getting velocity!...");
+      _last_vel = *vel_command;
   }
 
   void setupPublishers()
@@ -549,7 +575,15 @@ private:
 
             if (_pointcloud && is_depth_frame_arrived) {
               RCLCPP_DEBUG(logger_, "publishPCTopic(...)");
-              publishPCTopic(t);
+
+                if(_last_vel.linear.x < _min_x_vel &&
+                        _last_vel.angular.z > _min_theta_vel)
+                {
+                    RCLCPP_WARN(logger_, "skipping pointcloud publish, movin too fast");
+                }
+              else{
+                  publishPCTopic(t);
+              }
             }
 
             if (_align_depth && _align_pointcloud && is_depth_frame_arrived &&
@@ -1311,6 +1345,9 @@ private:
     return true;
   }
 
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr vel_sub;
+
+  geometry_msgs::msg::Twist _last_vel;
   rclcpp::Clock _ros_clock;
   std::unique_ptr<rs2::context> _ctx;
 
@@ -1367,10 +1404,15 @@ private:
   bool _pointcloud;
   bool _align_pointcloud;
   bool _align_depth;
+
+  double _min_x_vel;
+  double _min_theta_vel;
+
   PipelineSyncer _syncer;
   rs2_extrinsics _depth2color_extrinsics;
 
   rs2::frameset _aligned_frameset;
+
 };  // end class
 }  // namespace realsense_ros2_camera
 

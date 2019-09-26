@@ -36,7 +36,9 @@ def generate_launch_description():
                 'enable_depth': True,
                 'enable_aligned_depth': True,
                 'depth_fps': depth_fps,
-                'color_fps': color_fps
+                'color_fps': color_fps,
+                'depth_width': 848,#640,#848,
+                'depth_height': 480 
                 }]
             )   
     ])
