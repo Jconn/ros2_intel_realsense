@@ -32,13 +32,17 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/static_transform_broadcaster.h>
+
 #include <librealsense2/rs.hpp>
 #include <librealsense2/rsutil.h>
 #include <librealsense2/hpp/rs_processing.hpp>
+#include <librealsense2/rs_advanced_mode.hpp>
+
 // cpplint: c++ system headers
 #include <algorithm>
 #include <csignal>
 #include <iostream>
+#include <fstream>
 #include <limits>
 #include <map>
 #include <memory>
@@ -56,6 +60,7 @@
 constexpr auto realsense_ros2_camera_version = REALSENSE_ROS_EMBEDDED_VERSION_STR;
 using realsense_camera_msgs::msg::Extrinsics;
 using realsense_camera_msgs::msg::IMUInfo;
+
 
 namespace realsense_ros2_camera
 {
@@ -181,6 +186,7 @@ public:
             _min_x_vel);
 
     setupDevice();
+    loadJson();
     setupPublishers();
     setupSubscribers();
     setupStreams();
@@ -192,11 +198,15 @@ public:
 private:
   void getParameters()
   {
+    //this->declare_parameter("json_file_path", "");
     this->declare_parameter("min_x_vel", .10);
     this->declare_parameter("min_theta_vel", .9);
+
     RCLCPP_INFO(logger_, "getParameters...");
     this->get_parameter("min_x_vel", _min_x_vel);
     this->get_parameter("min_theta_vel", _min_theta_vel);
+    this->get_parameter("json_file_path", _json_file_path);
+
     this->get_parameter_or("enable_pointcloud", _pointcloud, POINTCLOUD);
     this->get_parameter_or("enable_aligned_pointcloud", _align_pointcloud, ALIGN_POINTCLOUD);
     // this->get_parameter_or("enable_sync", _sync_frames, SYNC_FRAMES);
@@ -282,6 +292,36 @@ private:
       std::string(DEFAULT_ACCEL_OPTICAL_FRAME_ID));
   }
 
+  void loadJson()
+  {
+      RCLCPP_INFO(logger_, "loadJson...");
+      if (!_json_file_path.empty())
+      {
+          if (_dev.is<rs400::advanced_mode>())
+          {
+              std::stringstream ss;
+              std::ifstream in(_json_file_path);
+              if (in.is_open())
+              {
+                  ss << in.rdbuf();
+                  std::string json_file_content = ss.str();
+
+                  auto adv = _dev.as<rs400::advanced_mode>();
+                  adv.load_json(json_file_content);
+                  //ROS_INFO_STREAM("JSON file is loaded! (" << _json_file_path << ")");
+                  RCLCPP_INFO(logger_, "JSON file is loaded! %s", _json_file_path.c_str());
+              }
+              else
+                  RCLCPP_WARN(logger_, "JSON file don't exist! %s", _json_file_path.c_str());
+          }
+          else
+              RCLCPP_WARN(logger_, "device don't support advanced settings");
+      }
+      else
+      {
+          RCLCPP_INFO(logger_, "no JSON file provided");
+      }
+  }
   void setupDevice()
   {
     RCLCPP_INFO(logger_, "setupDevice...");
@@ -1412,6 +1452,7 @@ private:
   rs2_extrinsics _depth2color_extrinsics;
 
   rs2::frameset _aligned_frameset;
+  std::string _json_file_path;
 
 };  // end class
 }  // namespace realsense_ros2_camera

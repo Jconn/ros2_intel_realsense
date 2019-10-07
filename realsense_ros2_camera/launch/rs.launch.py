@@ -21,6 +21,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     depth_fps = LaunchConfiguration('depth_fps', default='15')
     color_fps = LaunchConfiguration('color_fps', default='6')
+    json_file_path = LaunchConfiguration('json_file_path', default='none')
 
     return LaunchDescription([
             # Realsense
@@ -38,7 +39,8 @@ def generate_launch_description():
                 'depth_fps': depth_fps,
                 'color_fps': color_fps,
                 'depth_width': 848,#640,#848,
-                'depth_height': 480 
+                'depth_height': 480, 
+                'json_file_path': json_file_path
                 }]
             )   
     ])
