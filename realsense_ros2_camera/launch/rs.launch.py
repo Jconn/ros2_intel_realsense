@@ -14,14 +14,22 @@
 
 """Launch realsense_ros2_camera node without rviz2."""
 
+import os
 from launch import LaunchDescription
 import launch_ros.actions
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from ament_index_python.packages import get_package_share_directory
+
 def generate_launch_description():
     depth_fps = LaunchConfiguration('depth_fps', default='15')
     color_fps = LaunchConfiguration('color_fps', default='6')
-    json_file_path = LaunchConfiguration('json_file_path', default='none')
+    #json_file_path = LaunchConfiguration('json_file_path', default='')
+    launch_file_dir = os.path.join(get_package_share_directory('realsense_ros2_camera'), 'launch')
+
+    json_file_path = 'HighResHighAccuracyPreset.json'
+    #json_file_path = 'DefaultPreset_D435.json'
+    full_json_file_path = os.path.join(launch_file_dir, str(json_file_path))
 
     return LaunchDescription([
             # Realsense
@@ -40,7 +48,7 @@ def generate_launch_description():
                 'color_fps': color_fps,
                 'depth_width': 848,#640,#848,
                 'depth_height': 480, 
-                'json_file_path': json_file_path
+                'json_file_path': full_json_file_path
                 }]
             )   
     ])
