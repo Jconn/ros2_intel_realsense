@@ -48,7 +48,8 @@ def generate_launch_description():
                 'color_fps': color_fps,
                 'depth_width': 848,#640,#848,
                 'depth_height': 480, 
-                'json_file_path': full_json_file_path
+                'json_file_path': 'none', 
+                'filter_mag': 5 
                 }]
             )   
     ])

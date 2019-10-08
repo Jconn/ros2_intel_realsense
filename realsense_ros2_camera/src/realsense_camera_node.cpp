@@ -206,6 +206,7 @@ private:
     this->get_parameter("min_x_vel", _min_x_vel);
     this->get_parameter("min_theta_vel", _min_theta_vel);
     this->get_parameter("json_file_path", _json_file_path);
+    this->get_parameter("filter_mag", _filter_mag);
 
     this->get_parameter_or("enable_pointcloud", _pointcloud, POINTCLOUD);
     this->get_parameter_or("enable_aligned_pointcloud", _align_pointcloud, ALIGN_POINTCLOUD);
@@ -325,6 +326,9 @@ private:
   void setupDevice()
   {
     RCLCPP_INFO(logger_, "setupDevice...");
+
+    dec_filter.set_option(RS2_OPTION_FILTER_MAGNITUDE, _filter_mag);
+
     try {
       _ctx.reset(new rs2::context());
 
@@ -622,7 +626,7 @@ private:
                     RCLCPP_WARN(logger_, "skipping pointcloud publish, movin too fast");
                 }
               else{
-                  publishPCTopic(t);
+                  publishPCTopic(t, frame);
               }
             }
 
@@ -648,7 +652,7 @@ private:
             if (_pointcloud && is_depth_frame_arrived) {
               RCLCPP_INFO(logger_, "publishPCTopic(...)");
 
-              publishPCTopic(t);
+              publishPCTopic(t, frame);
             }
             publishFrame(frame, t);
           }
@@ -1134,15 +1138,33 @@ private:
     _align_depth_camera_publisher->publish(info_msg);
   }
 
-  void publishPCTopic(const rclcpp::Time & t)
+  void publishPCTopic(const rclcpp::Time & t, rs2::frame frame)
   {
-    auto image_depth16 = reinterpret_cast<const uint16_t *>(_image[DEPTH].data);
-    auto depth_intrinsics = _stream_intrinsics[DEPTH];
+    //auto image_depth16 = reinterpret_cast<const uint16_t *>(_image[DEPTH].data);
+
+    if (!frame.is<rs2::points>())
+    {
+        //RCLCPP_ERROR(logger_, "depth frame is not pc2! assertion broken");
+        //return;
+    }
+
+    auto filtered_depth_frame = frame;
+    filtered_depth_frame = dec_filter.process(filtered_depth_frame);
+    auto pc_filtered = pc.calculate(filtered_depth_frame); 
+    //auto pc_filtered = frame.as<rs2::points>();
+    //auto image = _image[DEPTH];
+    //pc_filtered = dec_filter.process(pc_filtered);
+
+    //image.data = const_cast<uchar *>(reinterpret_cast<const uchar *>(f.get_data()));
+    //auto image_depth16 = reinterpret_cast<const uint16_t *>(_image[DEPTH].data);
+
+
+    //auto depth_intrinsics = _stream_intrinsics[DEPTH];
     sensor_msgs::msg::PointCloud2 msg_pointcloud;
     msg_pointcloud.header.stamp = t;
     msg_pointcloud.header.frame_id = _optical_frame_id[DEPTH];
-    msg_pointcloud.width = depth_intrinsics.width/2;
-    msg_pointcloud.height = depth_intrinsics.height/2;
+    msg_pointcloud.width = pc_filtered.size();
+    msg_pointcloud.height = 1;
     msg_pointcloud.is_dense = true;
 
     sensor_msgs::PointCloud2Modifier modifier(msg_pointcloud);
@@ -1157,30 +1179,34 @@ private:
     sensor_msgs::PointCloud2Iterator<float> iter_y(msg_pointcloud, "y");
     sensor_msgs::PointCloud2Iterator<float> iter_z(msg_pointcloud, "z");
 
-    float depth_point[3], scaled_depth;
+    //float depth_point[3], scaled_depth;
 
     // Fill the PointCloud2 fields
-    for (int y = 0; y < depth_intrinsics.height; y+=2) {
-      for (int x = 0; x < depth_intrinsics.width; x+=2) {
-        scaled_depth = static_cast<float>(*image_depth16) * _depth_scale_meters;
-        float depth_pixel[2] = {static_cast<float>(x), static_cast<float>(y)};
-        rs2_deproject_pixel_to_point(depth_point, &depth_intrinsics, depth_pixel, scaled_depth);
+    auto vertex = pc_filtered.get_vertices();
+    for (size_t i = 0; i < pc_filtered.size(); ++i) {
+        /*
+           scaled_depth = static_cast<float>(*image_depth16) * _depth_scale_meters;
+           float depth_pixel[2] = {static_cast<float>(x), static_cast<float>(y)};
+           rs2_deproject_pixel_to_point(depth_point, &depth_intrinsics, depth_pixel, scaled_depth);
 
-        if (depth_point[2] <= .075f || depth_point[2] > 5.f) {
-            //TODO: handle invalid points eloquently
-          depth_point[0] = 10.f;
-          depth_point[1] = 10.f;
-          depth_point[2] = 10.f;
+           if (depth_point[2] <= .075f || depth_point[2] > 5.f) {
+        //TODO: handle invalid points eloquently
+        depth_point[0] = 10.f;
+        depth_point[1] = 10.f;
+        depth_point[2] = 10.f;
         }
 
-        *iter_x = depth_point[0];
-        *iter_y = depth_point[1];
-        *iter_z = depth_point[2];
-        image_depth16+=2;
+         *iter_x = depth_point[0];
+         *iter_y = depth_point[1];
+         *iter_z = depth_point[2];
+         image_depth16++;
+         ++iter_x; ++iter_y; ++iter_z;
+         */
+        *iter_x = vertex->x;
+        *iter_y = vertex->y;
+        *iter_z = vertex->z;
+        vertex++;
         ++iter_x; ++iter_y; ++iter_z;
-      }
-      //skipping a lot of data
-      image_depth16 += depth_intrinsics.width;
     }
     std_msgs::msg::Float64 scale;
     scale.data = _depth_scale_meters;
@@ -1453,7 +1479,9 @@ private:
 
   rs2::frameset _aligned_frameset;
   std::string _json_file_path;
-
+  rs2::decimation_filter dec_filter;  // Decimation - reduces depth frame density
+  rs2::pointcloud pc;
+  size_t _filter_mag;
 };  // end class
 }  // namespace realsense_ros2_camera
 
