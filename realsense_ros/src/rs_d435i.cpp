@@ -31,6 +31,28 @@ RealSenseD435I::RealSenseD435I(rs2::context ctx, rs2::device dev, rclcpp::Node &
   linear_accel_cov_ = DEFAULT_LINEAR_ACCEL_COV;
   angular_velocity_cov_ = DEFAULT_ANGULAR_VELOCITY_COV;
   initialized_ = true;
+  onInit();
+}
+
+void RealSenseD435I::onInit()
+{
+  getParameters();
+}
+
+void RealSenseD435I::getParameters()
+{
+  std::string unite_imu_method;
+  node_.declare_parameter("unite_imu_method", "");
+  node_.get_parameter("unite_imu_method", unite_imu_method);
+
+  if (unite_imu_method_str == "linear_interpolation")
+    imu_sync_method_ = imu_sync_method::LINEAR_INTERPOLATION;
+  else if (unite_imu_method_str == "copy")
+    imu_sync_method_ = imu_sync_method::COPY;
+  else
+    imu_sync_method_ = imu_sync_method::NONE;
+
+
 }
 
 void RealSenseD435I::publishTopicsCallback(const rs2::frame & frame)
@@ -62,6 +84,101 @@ Result RealSenseD435I::paramChangeCallback(const std::vector<rclcpp::Parameter> 
     }
   }
   return result;
+}
+
+//this relies on the global state imu sync method
+void RealSenseD435I::publishSyncedIMUTopic(const rs2::frame & frame, const rclcpp::Time & time)
+{
+  auto type = frame.get_profile().stream_type();
+  auto index = frame.get_profile().stream_index();
+  auto type_index = std::pair<rs2_stream, int>(type, index);
+  auto m_frame = frame.as<rs2::motion_frame>();
+  sensor_msgs::msg::Imu imu_msg;
+  realsense_msgs::msg::IMUInfo info_msg;
+
+  imu_msg.header.frame_id = OPTICAL_FRAME_ID.at(type_index);
+  imu_msg.orientation.x = 0.0;
+  imu_msg.orientation.y = 0.0;
+  imu_msg.orientation.z = 0.0;
+  imu_msg.orientation.w = 0.0;
+  imu_msg.orientation_covariance = {-1.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0,
+                                     0.0, 0.0, 0.0};
+  imu_msg.linear_acceleration_covariance = {linear_accel_cov_, 0.0, 0.0,
+                                            0.0, linear_accel_cov_, 0.0,
+                                            0.0, 0.0, linear_accel_cov_};
+  imu_msg.angular_velocity_covariance = {angular_velocity_cov_, 0.0, 0.0,
+                                         0.0, angular_velocity_cov_, 0.0,
+                                         0.0, 0.0, angular_velocity_cov_};
+
+  while (true)
+  {
+    auto stream = frame.get_profile().stream_type();
+    auto stream_index = (stream == GYRO.first)?GYRO:ACCEL;
+    double frame_time = frame.get_timestamp();
+
+    bool placeholder_false(false);
+    if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
+    {
+      setBaseTime(frame_time, RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME == frame.get_frame_timestamp_domain());
+    }
+
+    seq += 1;
+    double elapsed_camera_ms = (/*ms*/ frame_time - /*ms*/ _camera_time_base) / 1000.0;
+
+    if (0 != _synced_imu_publisher->getNumSubscribers())
+    {
+      auto crnt_reading = *(reinterpret_cast<const float3*>(frame.get_data()));
+      if (GYRO == stream_index)
+      {
+        init_gyro = true;
+      }
+      if (ACCEL == stream_index)
+      {
+        if (!init_accel)
+        {
+          // Init accel_factor:
+          Eigen::Vector3d v(crnt_reading.x, crnt_reading.y, crnt_reading.z);
+          accel_factor = 9.81 / v.norm();
+          ROS_INFO_STREAM("accel_factor set to: " << accel_factor);
+        }
+        init_accel = true;
+        if (true)
+        {
+          Eigen::Vector3d v(crnt_reading.x, crnt_reading.y, crnt_reading.z);
+          v*=accel_factor;
+          crnt_reading.x = v.x();
+          crnt_reading.y = v.y();
+          crnt_reading.z = v.z();
+        }
+      }
+      CIMUHistory::imuData imu_data(crnt_reading, elapsed_camera_ms);
+      switch (sync_method)
+      {
+        case NONE: //Cannot really be NONE. Just to avoid compilation warning.
+        case COPY:
+          elapsed_camera_ms = FillImuData_Copy(stream_index, imu_data, imu_msg);
+          break;
+        case LINEAR_INTERPOLATION:
+          elapsed_camera_ms = FillImuData_LinearInterpolation(stream_index, imu_data, imu_msg);
+          break;
+      }
+      if (elapsed_camera_ms < 0)
+        break;
+      ros::Time t(_ros_time_base.toSec() + elapsed_camera_ms);
+      imu_msg.header.seq = seq;
+      imu_msg.header.stamp = t;
+      if (!(init_gyro && init_accel))
+        break;
+      _synced_imu_publisher->Publish(imu_msg);
+      ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
+    }
+    break;
+  }
+
+  imu_msg.header.stamp = time;
+  imu_pub_[type_index]->publish(imu_msg);
+  imu_info_pub_[type_index]->publish(info_msg);
 }
 
 void RealSenseD435I::publishIMUTopic(const rs2::frame & frame, const rclcpp::Time & time)

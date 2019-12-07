@@ -15,6 +15,7 @@
 #ifndef REALSENSE__RS_D435I_HPP_
 #define REALSENSE__RS_D435I_HPP_
 
+#include <rclcpp/time.hpp>
 #include "realsense/rs_d435.hpp"
 
 using IMUInfo = realsense_msgs::msg::IMUInfo;
@@ -31,12 +32,21 @@ public:
   void publishIMUTopic(const rs2::frame & frame, const rclcpp::Time & time);
   IMUInfo getIMUInfo(const rs2::frame & frame, const stream_index_pair & stream_index);
 
+  enum imu_sync_method{NONE, COPY, LINEAR_INTERPOLATION};
+
 private:
+  void imu_callback(rs2::frame frame);
+  void imu_callback_sync(rs2::frame frame, imu_sync_method sync_method=imu_sync_method::COPY);
+
   const std::vector<stream_index_pair> IMAGE_STREAMS = {COLOR, DEPTH, INFRA1, INFRA2};
   const std::vector<stream_index_pair> MOTION_STREAMS = {ACCEL, GYRO};
   double linear_accel_cov_;
   double angular_velocity_cov_;
   bool initialized_ = false;
+  imu_sync_method imu_sync_method_;
+  rclcpp::Time ros_time_base_;  
+  double camera_time_base_;
+
 };
 }  // namespace perception
 #endif // REALSENSE__RS_D435I_HPP_
