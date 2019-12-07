@@ -14,6 +14,9 @@
 
 #include <sstream>
 #include "realsense/rs_base.hpp"
+#include <fstream>
+
+//using namespace realsense2_camera;
 
 namespace realsense
 {
@@ -24,15 +27,33 @@ RealSenseBase::RealSenseBase(rs2::context ctx, rs2::device dev, rclcpp::Node & n
   ctx_(ctx),
   dev_(dev)
 {
+  onInit();
+}
+
+void RealSenseBase::onInit()
+{
+  getParameters();
+
+  pipeline_ = rs2::pipeline(ctx_);
+  static_tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(node_);
+  node_.set_on_parameters_set_callback(std::bind(&RealSenseBase::paramChangeCallback, this, std::placeholders::_1));
+
+  loadJson(json_file_path_);
+}
+
+
+void RealSenseBase::getParameters()
+{
   // Publish static transforms
   if (node_.has_parameter("base_frame_id")) {
     node_.get_parameter("base_frame_id", base_frame_id_);
   } else {
     base_frame_id_ = node_.declare_parameter("base_frame_id", DEFAULT_BASE_FRAME_ID);
   }
-  pipeline_ = rs2::pipeline(ctx_);
-  static_tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(node_);
-  node_.set_on_parameters_set_callback(std::bind(&RealSenseBase::paramChangeCallback, this, std::placeholders::_1));
+
+  node_.declare_parameter("json_file_path", "");
+  node_.get_parameter("json_file_path", json_file_path_);
+
 }
 
 RealSenseBase::~RealSenseBase()
@@ -442,4 +463,37 @@ Result RealSenseBase::changeFPS(const stream_index_pair & stream, const rclcpp::
   }
   return result;
 }
+
+
+
+bool RealSenseBase::loadJson(const std::string & json_file_path){
+
+  if (!json_file_path.empty())
+  {
+    if (dev_.is<rs400::advanced_mode>())
+    {
+      std::stringstream ss;
+      std::ifstream in(json_file_path);
+
+      if (in.is_open())
+      {
+        ss << in.rdbuf();
+        std::string json_file_content = ss.str();
+
+        auto adv = dev_.as<rs400::advanced_mode>();
+        adv.load_json(json_file_content);
+        RCLCPP_INFO(node_.get_logger(), "JSON file is loaded! (%s)", json_file_path.c_str() );
+        return true;
+      }
+      else
+        RCLCPP_WARN(node_.get_logger(), "JSON file provided doesn't exist! (%s)", json_file_path.c_str() );
+    }
+    else
+      RCLCPP_WARN(node_.get_logger(), "Device does not support advanced settings!");
+  }
+  else
+    RCLCPP_INFO(node_.get_logger(),"JSON file is not provided");
+  return false;
+}
+
 }  // namespace realsense

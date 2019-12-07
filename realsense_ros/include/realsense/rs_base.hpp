@@ -27,6 +27,10 @@
 #include "realsense_msgs/msg/imu_info.hpp"
 #include "realsense/rs_constants.hpp"
 
+#include <librealsense2/rsutil.h>
+#include <librealsense2/hpp/rs_processing.hpp>
+#include <librealsense2/rs_advanced_mode.hpp>
+
 namespace realsense
 {
 using Result = rcl_interfaces::msg::SetParametersResult;
@@ -56,6 +60,7 @@ public:
 class RealSenseBase
 {
 public:
+
   RealSenseBase(rs2::context ctx, rs2::device dev, rclcpp::Node & node);
   virtual ~RealSenseBase();
   virtual void publishTopicsCallback(const rs2::frame & frame) = 0;
@@ -117,6 +122,13 @@ protected:
   std::map<stream_index_pair, rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr> imu_pub_;
   std::map<stream_index_pair, rclcpp::Publisher<realsense_msgs::msg::IMUInfo>::SharedPtr> imu_info_pub_;
   rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr odom_pub_;
+
+private:
+  bool loadJson(const std::string & json_file_path);
+  void onInit();
+  void getParameters();
+  std::string json_file_path_;
+
 };
 }  // namespace realsense
 #endif  // REALSENSE__RS_BASE_HPP_
