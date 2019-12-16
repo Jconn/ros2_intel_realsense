@@ -82,6 +82,29 @@ public:
   void printStreamProfiles(const std::vector<rs2::stream_profile> & profile_list);
 
 protected:
+
+  class float3
+  {
+    public:
+      float x, y, z;
+
+    public:
+      float3& operator*=(const float& factor)
+      {
+        x*=factor;
+        y*=factor;
+        z*=factor;
+        return (*this);
+      }
+      float3& operator+=(const float3& other)
+      {
+        x+=other.x;
+        y+=other.y;
+        z+=other.z;
+        return (*this);
+      }
+  };
+
   Result toggleStream(const stream_index_pair & stream, const rclcpp::Parameter & param);
   Result changeResolution(const stream_index_pair & stream, const rclcpp::Parameter & param);
   Result changeFPS(const stream_index_pair & stream, const rclcpp::Parameter & param);
