@@ -194,7 +194,7 @@ void RealSenseD435I::publishSyncedIMUTopic(RealSenseD435I::CIMUHistory::imuData 
   realsense_msgs::msg::IMUInfo info_msg;
 
   //imu_msg.header.frame_id = OPTICAL_FRAME_ID.at(type_index);
-  imu_msg.header.frame_id = DEFAULT_ACCEL_OPTICAL_FRAME_ID;
+  imu_msg.header.frame_id = DEFAULT_BASE_FRAME_ID;
   imu_msg.orientation.x = 0.0;
   imu_msg.orientation.y = 0.0;
   imu_msg.orientation.z = 0.0;
