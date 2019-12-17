@@ -20,6 +20,12 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     rviz_config_dir = os.path.join(get_package_share_directory('realsense_examples'), 'config', 'demo_rgbd.rviz')
+
+    launch_file_dir = os.path.join(get_package_share_directory('realsense_examples'), 'params')
+
+    json_file_path = 'HighResHighAccuracyPreset.json'
+    #json_file_path = 'DefaultPreset_D435.json'
+    full_json_file_path = os.path.join(launch_file_dir, str(json_file_path))
     rviz_node = Node(
         package='rviz2',
         node_executable='rviz2',
@@ -33,5 +39,9 @@ def generate_launch_description():
         node_executable='realsense_node',
         node_namespace='',
         output='screen',
+        parameters=[{
+            'json_file_path': full_json_file_path, 
+            'unite_imu_method': "copy" 
+            }],
         )
     return launch.LaunchDescription([rviz_node, rgbd_node])

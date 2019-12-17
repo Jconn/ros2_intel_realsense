@@ -43,6 +43,8 @@ private:
       class imuData
       {
         public:
+          imuData() {};
+
           imuData(const imuData& other):
             imuData(other.m_reading, other.m_time)
         {};
@@ -53,7 +55,7 @@ private:
           imuData operator*(const double factor);
           imuData operator+(const imuData& other);
         public:
-          RealSenseD435I::float3 m_reading;
+          float3 m_reading;
           double                    m_time;
       };
 
@@ -75,10 +77,12 @@ private:
   void imu_callback_sync(rs2::frame frame, imu_sync_method sync_method=imu_sync_method::COPY);
   void onInit();
   void getParameters();
-  void publishSyncedIMUTopic(const rs2::frame & frame, const rclcpp::Time & time);
-  void setBaseTime(double frame_time, bool warn_no_metadata);
-  double FillImuData_LinearInterpolation(const stream_index_pair stream_index, const RealSenseD435I::CIMUHistory::imuData imu_data, sensor_msgs::msg::Imu& imu_msg);
-  double FillImuData_Copy(const stream_index_pair stream_index, const RealSenseD435I::CIMUHistory::imuData imu_data, sensor_msgs::msg::Imu& imu_msg);
+  void publishSyncedIMUTopic(RealSenseD435I::CIMUHistory::imuData & accel_data,
+    const RealSenseD435I::CIMUHistory::imuData & gyro_data,
+    const rclcpp::Time & time);
+  void setBaseTime(double frame_time);
+  double FillImuData_LinearInterpolation(const RealSenseD435I::CIMUHistory::imuData & accel_data, const RealSenseD435I::CIMUHistory::imuData & gyro_data, sensor_msgs::msg::Imu& imu_msg);
+  double FillImuData_Copy(const RealSenseD435I::CIMUHistory::imuData & accel_data, const RealSenseD435I::CIMUHistory::imuData & gyro_data, sensor_msgs::msg::Imu& imu_msg);
 
 private:
   std::mutex imu_lock_;

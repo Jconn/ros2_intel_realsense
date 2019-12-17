@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include "realsense/rs_d435i.hpp"
-
 namespace realsense
 {
+
   RealSenseD435I::~RealSenseD435I()
   {
     imu_active_ = false;
@@ -26,9 +26,10 @@ RealSenseD435I::RealSenseD435I(rs2::context ctx, rs2::device dev, rclcpp::Node &
   : RealSenseD435(ctx, dev, node),
     _is_initialized_time_base(false)
 { 
-  for (auto & stream : MOTION_STREAMS) {
-    setupStream(stream);
-  }
+  //JC: do not set up motion streams - give them an independent thread for polling and syncing
+  //for (auto & stream : MOTION_STREAMS) {
+  //  setupStream(stream);
+  //}
   // if (enable_[ACCEL] == true) {
   //   linear_accel_cov_ = node_.declare_parameter("accel0.linear_acceleration_covariance", DEFAULT_LINEAR_ACCEL_COV);
   // }
@@ -73,19 +74,71 @@ void RealSenseD435I::getParameters()
 
 void RealSenseD435I::processImuData()
 {
+  using imuData =  RealSenseD435I::CIMUHistory::imuData;
+  //it looks like the imu data is the same sensor, and the accel and gyro data are two different streams on that sensor
+  //I think this means that there is no way to sync the two, because they are going to come in on the same frame
+  //different profile of the same device means that you just have to screen from the callback
+  /*
+  rs2::syncer sync(1);
+  auto dev_sensors = _dev_.query_sensors();
+  accel_sensor.open(accel_stream);
+  gyro_sensor.open(gyro_stream);
+  accel_sensor.start(sync);
+  gyro_sensor.start(sync);
+  */
+  rs2::pipeline motion_pipe;
+  rs2::config cfg;
+  cfg.enable_stream(RS2_STREAM_GYRO);
+  cfg.enable_stream(RS2_STREAM_ACCEL);
+  motion_pipe.start(cfg);
+  //std::pair<rs2::rs2_vector, double> accel_data = nullptr;
+  //std::pair<rs2::rs2_vector, double> gyro_data = nullptr;
+  imuData accel_data;
+  imuData gyro_data;
   while(imu_active_)
   {
-    rs2::frame frame;
+    rs2::frameset fset = motion_pipe.wait_for_frames();
+    auto time = node_.now();
+
+    // Find and retrieve IMU and/or tracking data
+    if (rs2::motion_frame accel_frame = fset.first_or_default(RS2_STREAM_ACCEL))
     {
-      const std::lock_guard<std::mutex> lock(imu_lock_);
-      if(imu_processor_.empty()) {
-        continue;
+      double ts = accel_frame.get_timestamp();
+      //accel_data = std::make_pair<rs2::rs2_vector, double>(accel_frame.get_motion_data(), ts);
+      accel_data.m_time = ts;
+      auto accel_vec_data = accel_frame.get_motion_data();
+      accel_data.m_reading.x = accel_vec_data.x; 
+      accel_data.m_reading.y = accel_vec_data.y; 
+      accel_data.m_reading.z = accel_vec_data.z; 
+
+      bool placeholder_false(false);
+      if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
+      {
+        RCLCPP_WARN(node_.get_logger(), "setting base time");
+        setBaseTime(ts);
       }
-      frame = std::move(imu_processor_.back()); 
-      imu_processor_.clear();
     }
-    publishSyncedIMUTopic(frame, node_.now());
+ 
+    if (rs2::motion_frame gyro_frame = fset.first_or_default(RS2_STREAM_GYRO))
+    {
+      double ts = gyro_frame.get_timestamp();
+      //gyro_data = std::make_pair<rs2::rs2_vector, double>(gyro_frame.get_motion_data(), ts);
+      gyro_data.m_time = ts;
+      auto gyro_vec_data = gyro_frame.get_motion_data();
+      gyro_data.m_reading.x = gyro_vec_data.x; 
+      gyro_data.m_reading.y = gyro_vec_data.y; 
+      gyro_data.m_reading.z = gyro_vec_data.z; 
+      bool placeholder_false(false);
+      if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
+      {
+        RCLCPP_WARN(node_.get_logger(), "setting base time");
+        setBaseTime(ts);
+      }
+    }
+    
+    publishSyncedIMUTopic(accel_data, gyro_data, time);
   }
+  motion_pipe.stop();
 }
 
 void RealSenseD435I::publishTopicsCallback(const rs2::frame & frame)
@@ -98,8 +151,6 @@ void RealSenseD435I::publishTopicsCallback(const rs2::frame & frame)
     //    || (enable_[GYRO] && (imu_pub_[GYRO]->get_subscription_count() > 0 || imu_info_pub_[GYRO]->get_subscription_count() > 0))) {
     //  publishSyncedIMUTopic(frame, t);
     //}
-    const std::lock_guard<std::mutex> lock(imu_lock_);
-    imu_processor_.push_back(frame); //implicit copy here
     //publishSyncedIMUTopic(frame, t);
   }
 }
@@ -124,7 +175,7 @@ Result RealSenseD435I::paramChangeCallback(const std::vector<rclcpp::Parameter> 
   return result;
 }
 
-void RealSenseD435I::setBaseTime(double frame_time, bool warn_no_metadata)
+void RealSenseD435I::setBaseTime(double frame_time)
 {
     //ROS_WARN_COND(warn_no_metadata, "Frame metadata isn't available! (frame_timestamp_domain = RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME)");
 
@@ -133,105 +184,84 @@ void RealSenseD435I::setBaseTime(double frame_time, bool warn_no_metadata)
 }
 
 //this relies on the global state imu sync method
-void RealSenseD435I::publishSyncedIMUTopic(const rs2::frame & frame, const rclcpp::Time & time)
+void RealSenseD435I::publishSyncedIMUTopic(RealSenseD435I::CIMUHistory::imuData & accel_data,
+    const RealSenseD435I::CIMUHistory::imuData & gyro_data,
+    const rclcpp::Time & time)
 {
+  using imuData =  RealSenseD435I::CIMUHistory::imuData;
 
-  static bool init_gyro(false), init_accel(false);
-
-  auto type = frame.get_profile().stream_type();
-  auto index = frame.get_profile().stream_index();
-  auto type_index = std::pair<rs2_stream, int>(type, index);
-  auto m_frame = frame.as<rs2::motion_frame>();
   sensor_msgs::msg::Imu imu_msg;
   realsense_msgs::msg::IMUInfo info_msg;
 
-  imu_msg.header.frame_id = OPTICAL_FRAME_ID.at(type_index);
+  //imu_msg.header.frame_id = OPTICAL_FRAME_ID.at(type_index);
+  imu_msg.header.frame_id = DEFAULT_ACCEL_OPTICAL_FRAME_ID;
   imu_msg.orientation.x = 0.0;
   imu_msg.orientation.y = 0.0;
   imu_msg.orientation.z = 0.0;
   imu_msg.orientation.w = 0.0;
   imu_msg.orientation_covariance = {-1.0, 0.0, 0.0,
-                                     0.0, 0.0, 0.0,
-                                     0.0, 0.0, 0.0};
+    0.0, 0.0, 0.0,
+    0.0, 0.0, 0.0};
   imu_msg.linear_acceleration_covariance = {linear_accel_cov_, 0.0, 0.0,
-                                            0.0, linear_accel_cov_, 0.0,
-                                            0.0, 0.0, linear_accel_cov_};
+    0.0, linear_accel_cov_, 0.0,
+    0.0, 0.0, linear_accel_cov_};
   imu_msg.angular_velocity_covariance = {angular_velocity_cov_, 0.0, 0.0,
-                                         0.0, angular_velocity_cov_, 0.0,
-                                         0.0, 0.0, angular_velocity_cov_};
+    0.0, angular_velocity_cov_, 0.0,
+    0.0, 0.0, angular_velocity_cov_};
 
-  while (true)
+
+
+  double accel_time_s = (/*ms*/ accel_data.m_time - /*ms*/ camera_time_base_) / 1000.0;
+  double gyro_time_s = (/*ms*/ gyro_data.m_time - /*ms*/ camera_time_base_) / 1000.0;
+  double elapsed_camera_s = 0.0;
+
+  if(gyro_time_s > accel_time_s)
+    elapsed_camera_s = gyro_time_s;
+  else
+    elapsed_camera_s = accel_time_s;
+
+  //RCLCPP_WARN(node_.get_logger(), "accel time is: %f", accel_time_s);
+  //RCLCPP_WARN(node_.get_logger(), "gyro time is: %f", gyro_time_s);
+
+  if (0 != imu_publisher_->get_subscription_count())
   {
-    auto stream = frame.get_profile().stream_type();
-    auto stream_index = (stream == GYRO.first)?GYRO:ACCEL;
-    double frame_time = frame.get_timestamp();
-    //RCLCPP_WARN(node_.get_logger(), "frame time is: %f", frame_time);
 
-    bool placeholder_false(false);
-    if (_is_initialized_time_base.compare_exchange_strong(placeholder_false, true) )
+    /*
+    Eigen::Vector3d v(accel_data.m_reading.x, accel_data.m_reading.y, accel_data.m_reading.z);
+    //TODO: debug something is wrong here
+    accel_factor = 9.81 / v.norm();
+    RCLCPP_INFO(node_.get_logger(), "accel_factor set to: %f", accel_factor);
+    v*=accel_factor;
+    // Init accel_factor:
+
+    accel_data.m_reading.x = v.x();
+    accel_data.m_reading.y = v.y();
+    accel_data.m_reading.z = v.z();
+    */
+
+    switch (imu_sync_method_)
     {
-      RCLCPP_WARN(node_.get_logger(), "setting base time");
-      setBaseTime(frame_time, RS2_TIMESTAMP_DOMAIN_SYSTEM_TIME == frame.get_frame_timestamp_domain());
-    }
-
-    double elapsed_camera_s = (/*ms*/ frame_time - /*ms*/ camera_time_base_) / 1000.0;
-
-    RCLCPP_WARN(node_.get_logger(), "elapsed_camera_s is: %f, stream index is %d", elapsed_camera_s, stream_index);
-    std::thread::id this_id = std::this_thread::get_id();
-    //RCLCPP_WARN(node_.get_logger(), "current thread id is %d, sensor id is %d", this_id, stream_index);
-    if (0 != imu_publisher_->get_subscription_count())
-    {
-      auto crnt_reading = *(reinterpret_cast<const float3*>(frame.get_data()));
-      if (GYRO == stream_index)
-      {
-        init_gyro = true;
-      }
-      if (ACCEL == stream_index)
-      {
-        if (!init_accel)
-        {
-          // Init accel_factor:
-          Eigen::Vector3d v(crnt_reading.x, crnt_reading.y, crnt_reading.z);
-          accel_factor = 9.81 / v.norm();
-          RCLCPP_INFO(node_.get_logger(), "accel_factor set to: %f", accel_factor);
-        }
-        init_accel = true;
-        if (true)
-        {
-          Eigen::Vector3d v(crnt_reading.x, crnt_reading.y, crnt_reading.z);
-          v*=accel_factor;
-          crnt_reading.x = v.x();
-          crnt_reading.y = v.y();
-          crnt_reading.z = v.z();
-        }
-      }
-      CIMUHistory::imuData imu_data(crnt_reading, elapsed_camera_s);
-      switch (imu_sync_method_)
-      {
-        case NONE: //Cannot really be NONE. Just to avoid compilation warning.
-        case COPY:
-          elapsed_camera_s = FillImuData_Copy(stream_index, imu_data, imu_msg);
-          break;
-        case LINEAR_INTERPOLATION:
-          elapsed_camera_s = FillImuData_LinearInterpolation(stream_index, imu_data, imu_msg);
-          break;
-      }
-      if (elapsed_camera_s < 0)
+      case NONE: //Cannot really be NONE. Just to avoid compilation warning.
+      case COPY:
+        FillImuData_Copy(accel_data, gyro_data, imu_msg);
         break;
-      rclcpp::Time t(ros_time_base_.seconds() + elapsed_camera_s);
-      imu_msg.header.stamp = t;
-      //imu_msg.header.stamp = node_.now();
-      if (!(init_gyro && init_accel))
+      case LINEAR_INTERPOLATION:
+        FillImuData_LinearInterpolation(accel_data, gyro_data, imu_msg);
         break;
-      imu_publisher_->publish(imu_msg);
-      //ROS_DEBUG("Publish united %s stream", rs2_stream_to_string(frame.get_profile().stream_type()));
     }
-    break;
+    if (elapsed_camera_s < 0)
+      return;
+    //this thing only takes int nanoseconds, or int seconds nanoseconds
+    uint64_t nano_seconds = ros_time_base_.nanoseconds() + static_cast<uint64_t>(elapsed_camera_s * 1e9);
+    rclcpp::Time t(nano_seconds);
+    imu_msg.header.stamp = t;
+    //imu_msg.header.stamp = node_.now();
+    imu_publisher_->publish(imu_msg);
   }
 
-  imu_msg.header.stamp = time;
-  imu_pub_[type_index]->publish(imu_msg);
-  imu_info_pub_[type_index]->publish(info_msg);
+ // imu_msg.header.stamp = time;
+ // imu_pub_[type_index]->publish(imu_msg);
+ // imu_info_pub_[type_index]->publish(info_msg);
 }
 
 void RealSenseD435I::publishIMUTopic(const rs2::frame & frame, const rclcpp::Time & time)
@@ -346,46 +376,10 @@ RealSenseD435I::CIMUHistory::imuData RealSenseD435I::CIMUHistory::imuData::opera
 }
 
 
-double RealSenseD435I::FillImuData_LinearInterpolation(const stream_index_pair stream_index, const RealSenseD435I::CIMUHistory::imuData imu_data, sensor_msgs::msg::Imu& imu_msg)
+double RealSenseD435I::FillImuData_LinearInterpolation(const RealSenseD435I::CIMUHistory::imuData & accel_data, const RealSenseD435I::CIMUHistory::imuData & gyro_data, sensor_msgs::msg::Imu& imu_msg)
 {
-    static bool expecting_accel_data = false; 
-    static CIMUHistory _imu_history(2);
+  /*
 
-    CIMUHistory::sensor_name this_sensor(static_cast<CIMUHistory::sensor_name>(ACCEL == stream_index));
-    CIMUHistory::sensor_name that_sensor(static_cast<CIMUHistory::sensor_name>(!this_sensor));
-
-    if(ACCEL == stream_index){
-      if(!expecting_accel_data){
-        RCLCPP_WARN(node_.get_logger(), "was expecting accel data");
-      }
-      else
-      {
-        _imu_history.add_data(this_sensor, imu_data);
-      }
-      expecting_accel_data = false;
-
-    }
-    else{
-      if(expecting_accel_data){
-        RCLCPP_WARN(node_.get_logger(), "was expecting gyro data");
-      }
-      else
-      {
-        _imu_history.add_data(this_sensor, imu_data);
-      }
-      expecting_accel_data = true;
-    }
-
-    if (!_imu_history.is_all_data(this_sensor) || !_imu_history.is_data(that_sensor) )
-        return -1;
-    const std::list<CIMUHistory::imuData> this_data = _imu_history.get_data(this_sensor);
-    CIMUHistory::imuData that_last_data = _imu_history.last_data(that_sensor);
-    std::list<CIMUHistory::imuData>::const_iterator this_data_iter = this_data.begin();
-    CIMUHistory::imuData this_last_data(*this_data_iter);
-    this_data_iter++;
-    CIMUHistory::imuData this_prev_data(*this_data_iter);
-    if (this_prev_data.m_time > that_last_data.m_time)
-        return -1;  // "that" data was already sent.
     double factor( (that_last_data.m_time - this_prev_data.m_time) / (this_last_data.m_time - this_prev_data.m_time) );
     CIMUHistory::imuData interp_data = this_prev_data*(1-factor) + this_last_data*factor;
 
@@ -403,24 +397,23 @@ double RealSenseD435I::FillImuData_LinearInterpolation(const stream_index_pair s
     imu_msg.linear_acceleration.y = accel_data.m_reading.y;
     imu_msg.linear_acceleration.z = accel_data.m_reading.z;
     return that_last_data.m_time;
+  TODO: linear interpolate this fn
+  */
+  return 0.0;
 }
 
 
-double RealSenseD435I::FillImuData_Copy(const stream_index_pair stream_index, const RealSenseD435I::CIMUHistory::imuData imu_data, sensor_msgs::msg::Imu& imu_msg)
+double RealSenseD435I::FillImuData_Copy(const RealSenseD435I::CIMUHistory::imuData & accel_data, const RealSenseD435I::CIMUHistory::imuData & gyro_data, sensor_msgs::msg::Imu& imu_msg)
 {
-    if (GYRO == stream_index)
-    {
-        imu_msg.angular_velocity.x = imu_data.m_reading.x;
-        imu_msg.angular_velocity.y = imu_data.m_reading.y;
-        imu_msg.angular_velocity.z = imu_data.m_reading.z;
-    }
-    else if (ACCEL == stream_index)
-    {
-        imu_msg.linear_acceleration.x = imu_data.m_reading.x;
-        imu_msg.linear_acceleration.y = imu_data.m_reading.y;
-        imu_msg.linear_acceleration.z = imu_data.m_reading.z;
-    }
-    return imu_data.m_time;
+  imu_msg.angular_velocity.x = gyro_data.m_reading.x;
+  imu_msg.angular_velocity.y = gyro_data.m_reading.y;
+  imu_msg.angular_velocity.z = gyro_data.m_reading.z;
+
+  imu_msg.linear_acceleration.x = accel_data.m_reading.x;
+  imu_msg.linear_acceleration.y = accel_data.m_reading.y;
+  imu_msg.linear_acceleration.z = accel_data.m_reading.z;
+
+  return accel_data.m_time;
 }
 
 
