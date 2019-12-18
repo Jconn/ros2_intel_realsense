@@ -45,7 +45,7 @@ RealSenseD435I::RealSenseD435I(rs2::context ctx, rs2::device dev, rclcpp::Node &
 void RealSenseD435I::onInit()
 {
   imu_publisher_ = node_.create_publisher<sensor_msgs::msg::Imu>(
-      "imu_raw",
+      "imu/data_raw",
       rclcpp::SensorDataQoS()
       ); 
   getParameters();
