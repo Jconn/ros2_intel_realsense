@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #include "realsense/rs_d435i.hpp"
+#include <Eigen/Dense>
+#include "include/imu_transformer/tf2_sensor_msgs.h"
 namespace realsense
 {
 
@@ -51,6 +53,10 @@ void RealSenseD435I::onInit()
   getParameters();
   imu_active_ = true;
   imu_thread_ = std::make_unique<std::thread>(std::bind(&RealSenseD435I::processImuData, this) );
+
+  tfBuffer_ = std::make_shared<tf2_ros::Buffer>(node_.get_clock());
+  // tfBuffer = new tf2_ros::Buffer(node->get_clock());
+  tfl_ = std::make_shared<tf2_ros::TransformListener>(*tfBuffer_);
 }
 
 void RealSenseD435I::getParameters()
@@ -183,6 +189,12 @@ void RealSenseD435I::setBaseTime(double frame_time)
     camera_time_base_ = frame_time;
 }
 
+bool RealSenseD435I::transformImuMsg(sensor_msgs::msg::Imu &imu_msg, const std::string target_frame)
+{
+
+
+}
+
 //this relies on the global state imu sync method
 void RealSenseD435I::publishSyncedIMUTopic(RealSenseD435I::CIMUHistory::imuData & accel_data,
     const RealSenseD435I::CIMUHistory::imuData & gyro_data,
@@ -194,7 +206,7 @@ void RealSenseD435I::publishSyncedIMUTopic(RealSenseD435I::CIMUHistory::imuData 
   realsense_msgs::msg::IMUInfo info_msg;
 
   //imu_msg.header.frame_id = OPTICAL_FRAME_ID.at(type_index);
-  imu_msg.header.frame_id = DEFAULT_BASE_FRAME_ID;
+  imu_msg.header.frame_id = "imu_camera_link";
   imu_msg.orientation.x = 0.0;
   imu_msg.orientation.y = 0.0;
   imu_msg.orientation.z = 0.0;
@@ -256,6 +268,19 @@ void RealSenseD435I::publishSyncedIMUTopic(RealSenseD435I::CIMUHistory::imuData 
     rclcpp::Time t(nano_seconds);
     imu_msg.header.stamp = t;
     //imu_msg.header.stamp = node_.now();
+    //
+    /*
+    try
+    {
+      sensor_msgs::msg::Imu imu_out;
+      tfBuffer_->transform(imu_msg, imu_out, "base_link");
+      imu_publisher_->publish(imu_out);
+    }
+    catch (tf2::TransformException ex)
+    {
+
+    }
+    */
     imu_publisher_->publish(imu_msg);
   }
 

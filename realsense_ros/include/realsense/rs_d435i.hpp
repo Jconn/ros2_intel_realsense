@@ -16,8 +16,17 @@
 
 #include <rclcpp/time.hpp>
 #include "realsense/rs_d435.hpp"
+#include "tf2/convert.h"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+#include "tf2_ros/buffer.h"
+#include "tf2_ros/message_filter.h"
+#include "tf2_ros/transform_broadcaster.h"
+#include "tf2_ros/transform_listener.h"
+#include "tf2_ros/buffer_interface.h"
+
 #include <atomic>
 #include <eigen3/Eigen/Geometry>
+#include <sensor_msgs/msg/imu.hpp>
 
 using IMUInfo = realsense_msgs::msg::IMUInfo;
 
@@ -33,7 +42,11 @@ public:
   void publishIMUTopic(const rs2::frame & frame, const rclcpp::Time & time);
   IMUInfo getIMUInfo(const rs2::frame & frame, const stream_index_pair & stream_index);
 
+  bool transformImuMsg(sensor_msgs::msg::Imu &imu_msg, const std::string target_frame);
   enum imu_sync_method{NONE, COPY, LINEAR_INTERPOLATION};
+
+  std::shared_ptr<tf2_ros::Buffer> tfBuffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tfl_;
 
 private:
   class CIMUHistory

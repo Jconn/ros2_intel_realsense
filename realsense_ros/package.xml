@@ -20,6 +20,8 @@
   <depend>realsense2</depend>
   <depend>realsense_msgs</depend>
   <depend>image_transport</depend>
+  <depend>eigen</depend>
+  <depend>imu_transformer</depend>
 
   <exec_depend>launch_ros</exec_depend>
   

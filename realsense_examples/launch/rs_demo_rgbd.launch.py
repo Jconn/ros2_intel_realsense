@@ -32,16 +32,19 @@ def generate_launch_description():
         node_name='rviz2',
         output = 'screen',
         arguments=['-d', rviz_config_dir],
-        parameters=[{'use_sim_time': 'false'}]
+        parameters=[{'use_sim_time': False}]
         )
     rgbd_node = Node(
         package='realsense_node',
         node_executable='realsense_node',
         node_namespace='',
         output='screen',
+        respawn=True,
         parameters=[{
             'json_file_path': full_json_file_path, 
-            'unite_imu_method': "copy" 
+            'unite_imu_method': "copy",
+            'log_level': 'info'
             }],
         )
-    return launch.LaunchDescription([rviz_node, rgbd_node])
+    #return launch.LaunchDescription([rviz_node, rgbd_node])
+    return launch.LaunchDescription([rgbd_node])

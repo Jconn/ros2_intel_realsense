@@ -288,7 +288,7 @@ void RealSenseBase::calculateTFAndPublish(const rs2::stream_profile & stream_in,
       RCLCPP_WARN(node_.get_logger(), "%s : using unity as default.", e.what());
       ex = rs2_extrinsics({{1, 0, 0, 0, 1, 0, 0, 0, 1}, {0,0,0}});
     } else {
-      throw e;
+      RCLCPP_WARN(node_.get_logger(), "caught exeception: %s ", e.what());
     }
   }
   auto Q = rotationMatrixToQuaternion(ex.rotation);

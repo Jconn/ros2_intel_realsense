@@ -74,6 +74,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(realsense_msgs)
+find_package(imu_transformer REQUIRED)
 
 find_package(realsense2)
 if(NOT realsense2_FOUND)
@@ -83,6 +84,20 @@ endif()
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
   ${realsense2_INCLUDE_DIRS}
+  #  ${EIGEN3_INCLUDE_DIRS}
+)
+set(dependencies
+  rclcpp
+  rclcpp_components
+  nav_msgs
+  sensor_msgs
+  cv_bridge
+  tf2
+  tf2_ros
+  pcl_conversions
+  realsense2
+  realsense_msgs
+  imu_transformer
 )
 
 set(node_plugins "")
@@ -99,18 +114,18 @@ target_link_libraries(${PROJECT_NAME}
   realsense2
 )
 
+
 ament_target_dependencies(${PROJECT_NAME}
-  rclcpp
-  rclcpp_components
-  nav_msgs
-  sensor_msgs
-  cv_bridge
-  tf2
-  tf2_ros
-  pcl_conversions
-  realsense2
-  realsense_msgs
+    ${dependencies}
 )
+
+#target_link_libraries(${PROJECT_NAME}
+#  imu_transformer
+#)
+
+#target_include_directories(${PROJECT_NAME} PUBLIC 
+#    ${imu_transformer_INCLUDE_DIRS}
+#)
 
 rclcpp_components_register_nodes(${PROJECT_NAME} "realsense::RealSenseNodeFactory")
 set(node_plugins "${node_plugins}realsense::RealSenseNodeFactory;$<TARGET_FILE:${PROJECT_NAME}>\n")
