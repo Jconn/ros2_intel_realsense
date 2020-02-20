@@ -33,5 +33,14 @@ def generate_launch_description():
         node_executable='realsense_node',
         node_namespace='',
         output='screen',
+        respawn=False,
+        parameters=[{
+            'json_file_path': full_json_file_path, 
+            'unite_imu_method': "copy",
+            'log_level': 'info',
+            'pc_stride': 4,
+            'depth0':{'fps': 15},
+            'color0': {'fps': 15},
+            }],
         )
     return launch.LaunchDescription([rviz_node, rgbd_node])

@@ -47,6 +47,7 @@ protected:
   rs2::align align_to_color_ = rs2::align(RS2_STREAM_COLOR);
   rs2::pointcloud pc_;
   rs2::points points_;
+  size_t pc_stride_;
 
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr aligned_depth_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr aligned_depth_info_pub_;

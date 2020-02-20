@@ -39,6 +39,9 @@ RealSenseD435::RealSenseD435(rs2::context ctx, rs2::device dev, rclcpp::Node & n
   aligned_depth_image_pub_ = node_.create_publisher<sensor_msgs::msg::Image>(ALIGNED_DEPTH_IMAGE_TOPIC, qos);
   aligned_depth_info_pub_ = node_.create_publisher<sensor_msgs::msg::CameraInfo>(ALIGNED_DEPTH_INFO_TOPIC, qos);
 
+  pc_stride_ = node_.declare_parameter("pc_stride", 1);
+  
+
   if (node_.has_parameter("enable_pointcloud")) {
     node_.get_parameter("enable_pointcloud", enable_pointcloud_);
   } else {
@@ -324,41 +327,53 @@ void RealSenseD435::publishDensePointCloud(const rs2::points & points, const rs2
     //
     pc_msg->header.stamp = time;
     pc_msg->header.frame_id = DEFAULT_COLOR_OPTICAL_FRAME_ID;
-    pc_msg->width = color_frame.get_width();
-    pc_msg->height = color_frame.get_height();
-    pc_msg->point_step = 3 * sizeof(float) + 3 * sizeof(uint8_t);
+    size_t orig_width = color_frame.get_width();
+    size_t orig_height = color_frame.get_height();
+    pc_msg->width = color_frame.get_width()/pc_stride_;
+    pc_msg->height = color_frame.get_height()/pc_stride_;
+    pc_msg->point_step = 3 * sizeof(float);
     pc_msg->row_step = pc_msg->point_step * pc_msg->width;
     pc_msg->is_dense = true;
 
     sensor_msgs::PointCloud2Modifier modifier(*pc_msg);
-    modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+    modifier.setPointCloud2FieldsByString(1, "xyz");
 
     sensor_msgs::PointCloud2Iterator<float> iter_x(*pc_msg, "x");
     sensor_msgs::PointCloud2Iterator<float> iter_y(*pc_msg, "y");
     sensor_msgs::PointCloud2Iterator<float> iter_z(*pc_msg, "z");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(*pc_msg, "r");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(*pc_msg, "g");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(*pc_msg, "b");
 
-    int channel_num = color_frame.get_bytes_per_pixel();
-    uint8_t * color_data = (uint8_t*)color_frame.get_data();
+    size_t pnt_idx = 0;
+    for (size_t x = 0; x < orig_height; x += pc_stride_) {
+        for (size_t y = 0; y < orig_width; y += pc_stride_) {
 
-    for (size_t pnt_idx = 0; pnt_idx < pc_msg->width*pc_msg->height; pnt_idx++) {
         *iter_x = vertex[pnt_idx].x;
         *iter_y = vertex[pnt_idx].y;
         *iter_z = vertex[pnt_idx].z;
 
-        *iter_r = color_data[pnt_idx*channel_num];
-        *iter_g = color_data[pnt_idx*channel_num+1];
-        *iter_b = color_data[pnt_idx*channel_num+2];
         ++iter_x;
         ++iter_y;
         ++iter_z;
-        ++iter_r;
-        ++iter_g;
-        ++iter_b;
-      }
-      pointcloud_pub_->publish(*pc_msg);
+
+        pnt_idx += pc_stride_;
+
+        //every column needs a stride tap 
+        //pnt_idx += pc_stride_;
+        //pnt_idx += (!(pnt_idx % orig_width)) * ( ( (pc_stride_-1) * orig_width) - pc_stride_);
+
+        //if( !(pnt_idx % orig_width) && pnt_idx !=0)
+        //{
+        //    pnt_idx += (pc_stride_-1)* orig_width;
+        //}
+        //else
+        //{
+        //    pnt_idx += pc_stride_;
+        //}
+        }
+        if(pc_stride_ > 1)
+            pnt_idx += ((pc_stride_ - 1) * orig_width) - pc_stride_; 
+
+    }
+    pointcloud_pub_->publish(*pc_msg);
   } else {
     sensor_msgs::msg::PointCloud2::UniquePtr pc_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
     //debug
@@ -368,19 +383,16 @@ void RealSenseD435::publishDensePointCloud(const rs2::points & points, const rs2
     pc_msg->header.frame_id = DEFAULT_COLOR_OPTICAL_FRAME_ID;
     pc_msg->width = color_frame.get_width();
     pc_msg->height =  color_frame.get_height();
-    pc_msg->point_step = 3 * sizeof(float) + 3 * sizeof(uint8_t);
+    pc_msg->point_step = 3 * sizeof(float);
     pc_msg->row_step = pc_msg->point_step * pc_msg->width;
     pc_msg->is_dense = true;
 
     sensor_msgs::PointCloud2Modifier modifier(*pc_msg);
-    modifier.setPointCloud2FieldsByString(2, "xyz", "rgb");
+    modifier.setPointCloud2FieldsByString(1, "xyz");
 
     sensor_msgs::PointCloud2Iterator<float> iter_x(*pc_msg, "x");
     sensor_msgs::PointCloud2Iterator<float> iter_y(*pc_msg, "y");
     sensor_msgs::PointCloud2Iterator<float> iter_z(*pc_msg, "z");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_r(*pc_msg, "r");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_g(*pc_msg, "g");
-    sensor_msgs::PointCloud2Iterator<uint8_t> iter_b(*pc_msg, "b");
 
     int channel_num = color_frame.get_bytes_per_pixel();
     uint8_t * color_data = (uint8_t*)color_frame.get_data();
@@ -390,15 +402,9 @@ void RealSenseD435::publishDensePointCloud(const rs2::points & points, const rs2
       *iter_y = vertex[pnt_idx].y;
       *iter_z = vertex[pnt_idx].z;
 
-      *iter_r = color_data[pnt_idx*channel_num];
-      *iter_g = color_data[pnt_idx*channel_num+1];
-      *iter_b = color_data[pnt_idx*channel_num+2];
       ++iter_x;
       ++iter_y;
       ++iter_z;
-      ++iter_r;
-      ++iter_g;
-      ++iter_b;
     }
     pointcloud_pub_->publish(std::move(pc_msg));
   }
