@@ -345,7 +345,7 @@ void RealSenseD435::publishDensePointCloud(const rs2::points & points, const rs2
     size_t pnt_idx = 0;
     for (size_t x = 0; x < orig_height; x += pc_stride_) {
         for (size_t y = 0; y < orig_width; y += pc_stride_) {
-
+        pnt_idx = x*orig_width + y;
         *iter_x = vertex[pnt_idx].x;
         *iter_y = vertex[pnt_idx].y;
         *iter_z = vertex[pnt_idx].z;
@@ -354,7 +354,7 @@ void RealSenseD435::publishDensePointCloud(const rs2::points & points, const rs2
         ++iter_y;
         ++iter_z;
 
-        pnt_idx += pc_stride_;
+        //pnt_idx += pc_stride_;
 
         //every column needs a stride tap 
         //pnt_idx += pc_stride_;
@@ -369,8 +369,8 @@ void RealSenseD435::publishDensePointCloud(const rs2::points & points, const rs2
         //    pnt_idx += pc_stride_;
         //}
         }
-        if(pc_stride_ > 1)
-            pnt_idx += ((pc_stride_ - 1) * orig_width) - pc_stride_; 
+        //if(pc_stride_ > 1)
+        //    pnt_idx += ((pc_stride_ - 1) * orig_width) - pc_stride_; 
 
     }
     pointcloud_pub_->publish(*pc_msg);
