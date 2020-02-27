@@ -25,6 +25,8 @@ RealSenseBase::RealSenseBase(rs2::context ctx, rs2::device dev, rclcpp::Node & n
   ctx_(ctx),
   dev_(dev)
 {
+  
+  frame_ns_ = node_.declare_parameter("frame_ns", "");
   // Publish static transforms
   if (node_.has_parameter("base_frame_id")) {
     node_.get_parameter("base_frame_id", base_frame_id_);
@@ -181,7 +183,7 @@ void RealSenseBase::publishImageTopic(const rs2::frame & frame, const rclcpp::Ti
     //debug
     //RCLCPP_INFO(node_.get_logger(), "non-intra: timestamp: %f, address: %p", time.seconds(), reinterpret_cast<std::uintptr_t>(img.get()));
     //
-    img->header.frame_id = OPTICAL_FRAME_ID.at(type_index);
+    img->header.frame_id = frame_ns_ + OPTICAL_FRAME_ID.at(type_index);
     img->header.stamp = time;
     image_pub_[type_index]->publish(*img);
   } else {
@@ -190,7 +192,7 @@ void RealSenseBase::publishImageTopic(const rs2::frame & frame, const rclcpp::Ti
     //debug
     //RCLCPP_INFO(node_.get_logger(), "intra: timestamp: %f, address: %p", time.seconds(), reinterpret_cast<std::uintptr_t>(img.get()));
     //
-    img->header.frame_id = OPTICAL_FRAME_ID.at(type_index);
+    img->header.frame_id = frame_ns_ + OPTICAL_FRAME_ID.at(type_index);
     img->header.stamp = time;
     image_pub_[type_index]->publish(std::move(img));
   }
@@ -205,7 +207,7 @@ void RealSenseBase::updateVideoStreamCalibData(const rs2::video_stream_profile &
   auto intrinsic = video_profile.get_intrinsics();
   camera_info_[type_index].width = intrinsic.width;
   camera_info_[type_index].height = intrinsic.height;
-  camera_info_[type_index].header.frame_id = OPTICAL_FRAME_ID.at(type_index);
+  camera_info_[type_index].header.frame_id = frame_ns_ + OPTICAL_FRAME_ID.at(type_index);
 
   camera_info_[type_index].k.at(0) = intrinsic.fx;
   camera_info_[type_index].k.at(2) = intrinsic.ppx;

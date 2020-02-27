@@ -40,6 +40,7 @@ RealSenseD435I::RealSenseD435I(rs2::context ctx, rs2::device dev, rclcpp::Node &
   }
 
   std::string unite_imu_method_str("");
+  node_.declare_parameter("unite_imu_method");
   node_.get_parameter_or("unite_imu_method", unite_imu_method_str, DEFAULT_UNITE_IMU_METHOD);
   if (unite_imu_method_str == "linear_interpolation")
     imu_sync_method_ = imu_sync_method::LINEAR_INTERPOLATION;
@@ -92,7 +93,7 @@ void RealSenseD435I::publishIMUTopic(const rs2::frame & frame)
   sensor_msgs::msg::Imu imu_msg;
   realsense_msgs::msg::IMUInfo info_msg;
 
-  imu_msg.header.frame_id = OPTICAL_FRAME_ID.at(type_index);
+  imu_msg.header.frame_id = frame_ns_ + OPTICAL_FRAME_ID.at(type_index);
   imu_msg.header.stamp = frameToTime(frame);
   ImuMessage_AddDefaultValues(imu_msg);
 
@@ -136,7 +137,7 @@ IMUInfo RealSenseD435I::getIMUInfo(const rs2::frame & frame, const stream_index_
   }
 
   auto index = 0;
-  info.header.frame_id = OPTICAL_FRAME_ID.at(stream_index);
+  info.header.frame_id = frame_ns_ + OPTICAL_FRAME_ID.at(stream_index);
   for (int i = 0; i < 3; ++i) {
     for (int j = 0; j < 4; ++j) {
       info.data[index] = imu_intrinsics.data[i][j];
@@ -243,7 +244,7 @@ void RealSenseD435I::imu_callback_sync(const rs2::frame & frame, imu_sync_method
 //      rclcpp::Time t = frameToTime(frame);
 //      imu_msg.header.stamp = t;
 
-      imu_msg.header.frame_id = OPTICAL_FRAME_ID.at(IMU);
+      imu_msg.header.frame_id = frame_ns_ + OPTICAL_FRAME_ID.at(IMU);
       ImuMessage_AddDefaultValues(imu_msg);
       imu_pub_[IMU]->publish(imu_msg);
 

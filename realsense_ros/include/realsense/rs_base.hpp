@@ -102,6 +102,7 @@ protected:
   rs2::pipeline pipeline_;
   rs2::config cfg_;
   std::string base_frame_id_;
+  std::string frame_ns_;
   rs2::frame_queue frame_data;
   std::thread work_thread_;
   std::shared_ptr<tf2_ros::StaticTransformBroadcaster> static_tf_broadcaster_;

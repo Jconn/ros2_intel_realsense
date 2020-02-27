@@ -1,0 +1,53 @@
+back/d435:
+  ros__parameters:
+    log_level: 'info'
+    pc_stride: 5
+
+    serial_no: 933322071235 # d435
+    frame_ns: "back_"
+    align_depth: true
+    enable_pointcloud: true
+    dense_pointcloud: true
+    color0:
+      enabled: true
+      resolution: [640,480]
+      fps: 15 
+    depth0:
+      enabled: true
+      resolution: [640,480]
+      fps: 15 
+    infra1:
+      enabled: true
+      resolution: [640,480]
+      fps: 15 
+    infra2:
+      enabled: true
+      resolution: [640,480]
+      fps: 15 
+
+front/d435i:
+  ros__parameters:
+    unite_imu_method: "copy"
+    log_level: 'info'
+    pc_stride: 4
+    serial_no: 923322071442 # d435i
+    frame_ns: "front_"
+    align_depth: true 
+    enable_pointcloud: true
+    dense_pointcloud: true
+    color0:
+      enabled: true
+      resolution: [640,480]
+      fps: 15 
+    depth0:
+      enabled: true
+      resolution: [640,480]
+      fps: 15 
+    infra1:
+      enabled: true
+      resolution: [640,480]
+      fps: 15
+    infra2:
+      enabled: true
+      resolution: [640,480]
+      fps: 15
