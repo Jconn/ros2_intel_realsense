@@ -342,13 +342,23 @@ void RealSenseD435::publishDensePointCloud(const rs2::points & points, const rs2
     sensor_msgs::PointCloud2Iterator<float> iter_y(*pc_msg, "y");
     sensor_msgs::PointCloud2Iterator<float> iter_z(*pc_msg, "z");
 
+    float std_nan = std::numeric_limits<float>::quiet_NaN();
+
     size_t pnt_idx = 0;
     for (size_t x = 0; x < orig_height; x += pc_stride_) {
         for (size_t y = 0; y < orig_width; y += pc_stride_) {
         pnt_idx = x*orig_width + y;
-        *iter_x = vertex[pnt_idx].x;
-        *iter_y = vertex[pnt_idx].y;
-        *iter_z = vertex[pnt_idx].z;
+        if (vertex[pnt_idx].z <= 0.02f) {
+            *iter_x = std_nan;
+            *iter_y = std_nan;
+            *iter_z = std_nan;
+        }
+        else
+        {
+            *iter_x = vertex[pnt_idx].x;
+            *iter_y = vertex[pnt_idx].y;
+            *iter_z = vertex[pnt_idx].z;
+        }
 
         ++iter_x;
         ++iter_y;
