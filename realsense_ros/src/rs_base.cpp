@@ -187,6 +187,9 @@ void RealSenseBase::publishImageTopic(const rs2::frame & frame, const rclcpp::Ti
     //
     img->header.frame_id = frame_ns_ + OPTICAL_FRAME_ID.at(type_index);
     img->header.stamp = time;
+    auto now = node_.get_clock()->now();
+    auto delta = now.seconds()-time.seconds();
+    //std::cout << "[img]delta is: " << delta << std::endl;
     image_pub_[type_index]->publish(*img);
   } else {
     auto img = std::make_unique<sensor_msgs::msg::Image>();
@@ -196,6 +199,8 @@ void RealSenseBase::publishImageTopic(const rs2::frame & frame, const rclcpp::Ti
     //
     img->header.frame_id = frame_ns_ + OPTICAL_FRAME_ID.at(type_index);
     img->header.stamp = time;
+
+
     image_pub_[type_index]->publish(std::move(img));
   }
   //TODO: need to update calibration data if anything is changed dynamically.

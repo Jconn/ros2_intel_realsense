@@ -52,7 +52,8 @@ protected:
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr aligned_depth_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr aligned_depth_info_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub_;
-
+  void loadJson(rs2::device dev);
+  std::string json_file_path_;
 private:
   const std::vector<stream_index_pair> IMAGE_STREAMS = {COLOR, DEPTH, INFRA1, INFRA2};
 };
