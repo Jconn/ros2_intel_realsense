@@ -15,6 +15,10 @@
 #include <opencv2/opencv.hpp>
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 #include "realsense/rs_d435.hpp"
+#include <librealsense2/rs_advanced_mode.hpp>
+
+#include <iostream>
+#include <chrono>
 
 namespace realsense
 {
@@ -42,6 +46,10 @@ RealSenseD435::RealSenseD435(rs2::context ctx, rs2::device dev, rclcpp::Node & n
   pc_stride_ = node_.declare_parameter("pc_stride", 1);
   
 
+  node_.declare_parameter("json_file_path", "");
+  //json_file_path_ = node_.declare_parameter("json_file_path", "");
+  node_.get_parameter("json_file_path", json_file_path_);
+
   if (node_.has_parameter("enable_pointcloud")) {
     node_.get_parameter("enable_pointcloud", enable_pointcloud_);
   } else {
@@ -58,11 +66,46 @@ RealSenseD435::RealSenseD435(rs2::context ctx, rs2::device dev, rclcpp::Node & n
   } else {
     dense_pc_ = node_.declare_parameter("dense_pointcloud", DENSE_PC);
   }
+
+  loadJson(dev);
   initialized_ = true;
 }
 
+  void RealSenseD435::loadJson(rs2::device dev)
+  {
+      RCLCPP_INFO(node_.get_logger(), "loadJson...");
+      if (!json_file_path_.empty())
+      {
+          if (dev.is<rs400::advanced_mode>())
+          {
+              std::stringstream ss;
+              std::ifstream in(json_file_path_);
+              if (in.is_open())
+              {
+                  ss << in.rdbuf();
+                  std::string json_file_content = ss.str();
+
+                  auto adv = dev.as<rs400::advanced_mode>();
+                  adv.load_json(json_file_content);
+                  //ROS_INFO_STREAM("JSON file is loaded! (" << _json_file_path << ")");
+                  RCLCPP_INFO(node_.get_logger(), "JSON file is loaded! %s", json_file_path_.c_str());
+              }
+              else
+                  RCLCPP_WARN(node_.get_logger(), "JSON file don't exist! %s", json_file_path_.c_str());
+          }
+          else
+              RCLCPP_WARN(node_.get_logger(), "device don't support advanced settings");
+      }
+      else
+      {
+          RCLCPP_INFO(node_.get_logger(), "no JSON file provided");
+      }
+  }
+
 void RealSenseD435::publishTopicsCallback(const rs2::frame & frame)
 {
+
+    auto start = std::chrono::steady_clock::now();
   rs2::frameset frameset = frame.as<rs2::frameset>();
   rclcpp::Time t = frameToTime(frame);
   if (enable_[COLOR] && (image_pub_[COLOR]->get_subscription_count() > 0 || camera_info_pub_[COLOR]->get_subscription_count() > 0)){
@@ -94,6 +137,9 @@ void RealSenseD435::publishTopicsCallback(const rs2::frame & frame)
       points_ = pc_.calculate(depth);
       if (dense_pc_ == true) {
         publishDensePointCloud(points_, color_frame, t);
+        auto end = std::chrono::steady_clock::now();
+        std::chrono::duration<double> elapsed_seconds = end-start;
+        //std::cout << "elapsed time: " << elapsed_seconds.count() << "s\n";
       } else {
         publishSparsePointCloud(points_, color_frame, t);
       }
@@ -383,6 +429,9 @@ void RealSenseD435::publishDensePointCloud(const rs2::points & points, const rs2
         //    pnt_idx += ((pc_stride_ - 1) * orig_width) - pc_stride_; 
 
     }
+    auto now = node_.get_clock()->now();
+    auto delta = now.seconds()-time.seconds();
+    //std::cout << "[pc]delta is: " << delta << std::endl;
     pointcloud_pub_->publish(*pc_msg);
   } else {
     sensor_msgs::msg::PointCloud2::UniquePtr pc_msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
