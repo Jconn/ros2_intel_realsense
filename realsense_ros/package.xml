@@ -20,6 +20,7 @@
   <depend>realsense2</depend>
   <depend>realsense_msgs</depend>
   <depend>image_transport</depend>
+  <depend>meka_heartbeat_cpp</depend>
 
   <build_depend>rcl</build_depend>
 

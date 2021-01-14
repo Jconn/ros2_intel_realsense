@@ -71,6 +71,7 @@ public:
                        const std::string & to);
   tf2::Quaternion rotationMatrixToQuaternion(const float rotation[9]) const;
 
+  void createBond()
   void printDeviceInfo();
   void printSupportedStreamProfiles();
   void printActiveStreamProfiles();
@@ -96,6 +97,7 @@ protected:
     VideoStreamInfo() {}
   }VideoStreamInfo;
 
+  std::unique_ptr<MekaHeartbeatSecondary> meka_heartbeat_{nullptr};
   rclcpp::Node & node_;
   rs2::context ctx_;
   rs2::device dev_;

@@ -38,6 +38,14 @@ RealSenseBase::RealSenseBase(rs2::context ctx, rs2::device dev, rclcpp::Node & n
   pipeline_ = rs2::pipeline(ctx_);
   static_tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(node_);
   node_.set_on_parameters_set_callback(std::bind(&RealSenseBase::paramChangeCallback, this, std::placeholders::_1));
+  createBond();
+}
+
+void RealSenseBase::createBond()
+{
+    RCLCPP_INFO(get_logger(), "Creating bond (%s) to poser.", node_.get_name());
+    meka_heartbeat_ = std::make_unique<MekaHeartbeatSecondary>(*node_);
+    meka_heartbeat_->createBond();
 }
 
 RealSenseBase::~RealSenseBase()

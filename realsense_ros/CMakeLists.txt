@@ -75,6 +75,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
 find_package(realsense_msgs)
+find_package(meka_heartbeat_cpp REQUIRED)
 
 find_package(realsense2)
 if(NOT realsense2_FOUND)
@@ -112,6 +113,7 @@ ament_target_dependencies(${PROJECT_NAME}
   pcl_conversions
   realsense2
   realsense_msgs
+  meka_heartbeat_cpp
 )
 
 rclcpp_components_register_nodes(${PROJECT_NAME} "realsense::RealSenseNodeFactory")
