@@ -26,6 +26,7 @@
 #include "librealsense2/rs.hpp"
 #include "realsense_msgs/msg/imu_info.hpp"
 #include "realsense/rs_constants.hpp"
+#include "meka_heartbeat_cpp/meka_heartbeat_secondary.hpp"
 
 namespace realsense
 {

@@ -43,7 +43,7 @@ RealSenseBase::RealSenseBase(rs2::context ctx, rs2::device dev, rclcpp::Node & n
 
 void RealSenseBase::createBond()
 {
-    RCLCPP_INFO(get_logger(), "Creating bond (%s) to poser.", node_.get_name());
+    RCLCPP_INFO(node_.get_logger(), "Creating bond (%s) to poser.", node_.get_name());
     meka_heartbeat_ = std::make_unique<MekaHeartbeatSecondary>(*node_);
     meka_heartbeat_->createBond();
 }
